@@ -30,13 +30,36 @@ import {
 import type { Points24 } from "./points24";
 import type { Regions } from "./regions";
 
+/** Seeds scanned per level to list its expressions (36 or 72); every expression gets dozens of seeds. */
+const SEED_SCAN = 5_000;
+const seedsByLevel = new Map<MathLevel, Map<string, number[]>>();
+
+/** Every expression of a level with the seeds that deal it. */
+export function levelSeeds(level: MathLevel): Map<string, number[]> {
+  let seeds = seedsByLevel.get(level);
+  if (!seeds) {
+    seeds = new Map();
+    for (let seed = 0; seed < SEED_SCAN; seed++) {
+      const key = generateProblem(level, seed).key;
+      seeds.set(key, [...(seeds.get(key) ?? []), seed]);
+    }
+    seedsByLevel.set(level, seeds);
+  }
+  return seeds;
+}
+
 /**
- * Seeds tried for an expression not among the recent ones. A level with fewer expressions than that (1·2단계:
- * 36) never finds one, so the tries must cover the whole level: then the pick is the expression seen longest ago and
- * a level of n expressions repeats every n problems, i.e. never within the last min(50, n − 1) (spec 결정 사항).
- * 500 random tries miss one of 36 expressions with a chance of about 3 in 100,000.
+ * A seed of an expression outside the last min(50, n − 1) recent ones of a level of n expressions (spec 결정 사항):
+ * the allowed expressions are fixed first and `pick` (an index below its argument) only chooses among them.
  */
-const FRESH_TRIES = 500;
+export function freshSeed(level: MathLevel, recentKeys: readonly string[], pick: (n: number) => number = (n) => randomInt(n)) {
+  const seeds = levelSeeds(level);
+  const banned = new Set(recentKeys.slice(-Math.min(RECENT_KEPT, seeds.size - 1)));
+  const allowed = [...seeds.keys()].filter((k) => !banned.has(k));
+  const ofKey = seeds.get(allowed[pick(allowed.length)]!)!;
+  const seed = ofKey[pick(ofKey.length)]!;
+  return { seed, answer: generateProblem(level, seed).answer };
+}
 
 type OpenRow = { guardian_id: string; id: string; seed: number; level: MathLevel; answer: number; sent_at: number };
 type RecentRow = Recent & { key: string };
@@ -113,21 +136,6 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
     q.trimRecent.run({ g: guardianId });
   }
 
-  /** A seed whose expression is not among the recent ones; small levels (36 expressions) take the one seen longest ago. */
-  function freshSeed(level: MathLevel, recent: readonly RecentRow[]): { seed: number; answer: number } {
-    const lastSeen = new Map<string, number>();
-    recent.forEach((r, i) => lastSeen.set(r.key, i));
-    let best: { seed: number; answer: number; seen: number } | undefined;
-    for (let i = 0; i < FRESH_TRIES; i++) {
-      const seed = randomInt(0, 2 ** 31);
-      const p = generateProblem(level, seed);
-      const seen = lastSeen.get(p.key) ?? -1;
-      if (seen === -1) return { seed, answer: p.answer };
-      if (!best || seen < best.seen) best = { seed, answer: p.answer, seen };
-    }
-    return best!;
-  }
-
   /** The open problem, made now when there is none. Reloading gets the same one (D32). */
   function problem(guardianId: string, now: number): ProblemReply | Refused {
     const g = q.guardian.get(guardianId);
@@ -137,7 +145,7 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
     const recent = q.recent.all(guardianId);
     const waitMs = nextProblemAt(recent) - now;
     if (waitMs > 0) return { problem: null, waitMs, ...status(g, now) };
-    const { seed, answer } = freshSeed(g.math_step, recent);
+    const { seed, answer } = freshSeed(g.math_step, recent.map((r) => r.key));
     const row: OpenRow = { guardian_id: guardianId, id: randomBytes(12).toString("base64url"), seed, level: g.math_step, answer, sent_at: now };
     q.insertOpen.run(row);
     return { problem: show(row), waitMs: 0, ...status(g, now) };

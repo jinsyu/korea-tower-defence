@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test responses and rows are read loosely */
-import { WAVE_MS } from "@ktd/core";
+import { generateProblem, WAVE_MS } from "@ktd/core";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DAY_MS, kstDate, kstMidnight } from "./dates";
 import { hashKey } from "./guardians";
+import { freshSeed, levelSeeds } from "./math";
 import { startServer, type Harness } from "./test-server";
 
 let h: Harness;
@@ -36,6 +37,27 @@ async function solve(key: string, right: boolean, ms = 4000) {
   const a = answerOf(key);
   return (await answer(key, body.problem.id, right ? a : (a + 1) % 4)).body;
 }
+
+describe("no repeat of recent expressions, whatever the random numbers (D32)", () => {
+  it.each([
+    [1, 36, 35],
+    [2, 36, 35],
+    [3, 72, 50],
+  ] as const)("level %i: %i expressions, never one of the last %i", (level, total, banned) => {
+    const keys = [...levelSeeds(level).keys()];
+    expect(keys).toHaveLength(total);
+    // History: every expression once, so all but the oldest few are banned; then each forced pick in turn.
+    const recent = [...keys.slice(1), keys[0]!].slice(-50);
+    const bannedKeys = recent.slice(-banned);
+    const allowedCount = total - new Set(bannedKeys).size;
+    for (let forced = 0; forced < total; forced++) {
+      // A "random" source that always tries the same index (or the last one if fewer are offered).
+      const { seed } = freshSeed(level, recent, (n) => Math.min(forced, n - 1));
+      expect(bannedKeys).not.toContain(generateProblem(level, seed).key);
+    }
+    expect(allowedCount).toBe(total - banned);
+  });
+});
 
 describe("the open problem (D32, D33)", () => {
   it("sends the expression and four choices only, never the answer", async () => {

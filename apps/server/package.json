@@ -1,0 +1,22 @@
+{
+  "name": "server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file-if-exists=.env.local --watch --import tsx src/main.ts",
+    "start": "node --env-file-if-exists=.env.local --import tsx src/main.ts",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.2",
+    "socket.io-client": "4.8.4",
+    "typescript": "5.9.3"
+  },
+  "dependencies": {
+    "@ktd/core": "workspace:*",
+    "socket.io": "4.8.4",
+    "tsx": "4.23.15"
+  }
+}

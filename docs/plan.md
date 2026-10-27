@@ -86,7 +86,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T2: 프로젝트 초기화 (워크스페이스, 테스트 환경, 기본 SEO·파비콘, 빈 배포 가능 상태) — DoD: D75(기본)
 
-- [ ] T2
+- [x] T2
 
 - pnpm 워크스페이스
   - `apps/web`: Next.js App Router, TypeScript, Tailwind, shadcn/ui

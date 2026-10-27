@@ -120,7 +120,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T3: 첫 진입 화면 1 — gojang 데이터 가져오기, 첫 화면, 학년군, 지역 고르기 — DoD: D2, D26(화면), D43, D60(화면), D62(이 화면들)
 
-- [ ] T3
+- [x] T3
 - 기준 시안: `option-b.html?screen=home`, `?screen=grade`, `?screen=region`, 데모 `flow`, `pick-region`
 
 - `scripts/data/import-gojang.ts`

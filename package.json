@@ -9,7 +9,8 @@
     "typecheck": "pnpm -r typecheck",
     "lint": "pnpm -r lint",
     "test": "vitest run",
-    "test:e2e": "pnpm --filter web test:e2e"
+    "test:e2e": "pnpm --filter web test:e2e",
+    "data:import-gojang": "node scripts/data/import-gojang.ts"
   },
   "devDependencies": {
     "@eslint/js": "9.39.5",

@@ -3,6 +3,10 @@
 @import "shadcn/tailwind.css";
 
 @custom-variant dark (&:is(.dark *));
+/* Breakpoints from mockup B */
+@custom-variant wide (@media (min-width: 900px));
+@custom-variant short-phone (@media (max-width: 899px) and (max-height: 700px));
+@custom-variant wide-or-landscape (@media (min-width: 900px), (orientation: landscape) and (max-height: 560px) and (min-width: 600px));
 
 @theme inline {
   --color-background: var(--background);
@@ -11,9 +15,14 @@
   --font-heading: var(--font-display);
   --color-deep: var(--deep);
   --color-navy: var(--navy);
+  --color-navy2: var(--navy2);
+  --color-navy3: var(--navy3);
+  --color-mut: var(--mut);
   --color-yellow: var(--yellow);
   --color-red: var(--red);
   --color-cyan: var(--cyan);
+  --animate-blink: blink 1.2s steps(2) infinite;
+  --animate-lower-in: lower-in 0.35s cubic-bezier(0.2, 0.9, 0.3, 1);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -56,6 +65,9 @@
   /* Broadcast palette (spec: live-broadcast art style) */
   --deep: #06102A;
   --navy: #0B1B3A;
+  --navy2: #12285A;
+  --navy3: #1B3F86;
+  --mut: #9FB0D0;
   --yellow: #FFD60A;
   --red: #FF3B30;
   --cyan: #22D3EE;
@@ -136,5 +148,26 @@
   }
   html {
     @apply font-sans;
+  }
+}
+@keyframes blink {
+  50% {
+    opacity: 0.2;
+  }
+}
+
+@keyframes lower-in {
+  from {
+    transform: translateX(-30px);
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

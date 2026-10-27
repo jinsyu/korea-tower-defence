@@ -2,24 +2,46 @@
 
 import { TOWER_TYPES } from "@ktd/core";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import { TowerCanvas } from "@/components/art/painted-canvas";
 import { BugTag, broadcastButton } from "@/components/broadcast";
+import { NickChoices, sameNick, useNickCandidates } from "@/components/nick-choices";
 import { useStartFlow } from "@/components/start-flow";
-import { nicknameCandidates } from "@/lib/fake-nicknames";
+import { saveDeviceKey } from "@/lib/device-key";
+import { callServer, OFFLINE_TEXT, type Created } from "@/lib/game-server";
 import { TOWER_TYPE_INFO } from "@/lib/tower-types";
 
 const labelClass = "min-w-0 truncate font-heading text-lg text-yellow";
 
+/** Step 3: nickname from the server's candidates and a tower type. "다음" makes the guardian on the server. */
 export function NickPicker() {
-  const { region, nickSeed, setNickSeed, nickname, setNickname, towerType, setTowerType } = useStartFlow();
+  const { band, region, nickname, setNickname, towerType, setTowerType, issueCode } = useStartFlow();
   const router = useRouter();
-  const candidates = nicknameCandidates(nickSeed);
-  const picked = nickname ?? candidates[0];
+  const { candidates, reroll, failed } = useNickCandidates();
+  // After "다시 뽑기" the old pick is gone from the list, so the first new candidate is picked.
+  const picked = candidates?.find((c) => sameNick(nickname, c)) ?? candidates?.[0] ?? null;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const reroll = () => {
-    const next = nickSeed + 1;
-    setNickSeed(next);
-    setNickname(nicknameCandidates(next)[0]);
+  const create = async () => {
+    if (!region) return router.push("/start/region");
+    if (!picked || busy) return;
+    setBusy(true);
+    setError(null);
+    const res = await callServer<Created>("/guardians", {
+      method: "POST",
+      body: { band, region: region.code, nick: picked, towerType },
+    });
+    setBusy(false);
+    if (res.ok) {
+      saveDeviceKey(res.data.key);
+      issueCode(res.data.code);
+      router.push("/start/code");
+    } else if (res.status === 429) {
+      setError("이곳에서 지킴이를 너무 많이 만들었어요. 잠시 뒤에 다시 해요.");
+    } else {
+      setError(res.status === 0 ? OFFLINE_TEXT : "지킴이를 만들지 못했어요. 처음부터 다시 골라 주세요.");
+    }
   };
 
   return (
@@ -38,25 +60,7 @@ export function NickPicker() {
             다시 뽑기
           </button>
         </div>
-        <div role="group" aria-label="별명 후보" className="grid grid-cols-1 gap-1.5 wide:grid-cols-3">
-          {candidates.map((c) => {
-            const pressed = c.nick === picked.nick && c.tag === picked.tag;
-            return (
-              <button
-                key={`${c.nick}#${c.tag}`}
-                type="button"
-                aria-pressed={pressed}
-                onClick={() => setNickname(c)}
-                className="group min-h-13 min-w-0 truncate border-l-6 border-navy3 bg-navy2 px-3 text-left font-heading text-[22px] focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-yellow aria-pressed:border-red aria-pressed:bg-yellow aria-pressed:text-navy"
-              >
-                {c.nick}
-                <small className="ml-1.5 font-sans text-[13px] font-black text-mut group-aria-pressed:text-navy">
-                  #{c.tag}
-                </small>
-              </button>
-            );
-          })}
-        </div>
+        <NickChoices candidates={candidates} picked={picked} onPick={setNickname} />
 
         <h2 className={labelClass}>타워 계열 (언제든 바꿀 수 있어요)</h2>
         <div role="group" aria-label="타워 계열" className="grid grid-cols-3 gap-1.5">
@@ -79,13 +83,18 @@ export function NickPicker() {
         </div>
 
         <div className="flex flex-wrap gap-2.5">
-          <button type="button" className={`${broadcastButton} bg-yellow`} onClick={() => {
-              setNickname(picked);
-              router.push("/start/code");
-            }}>
+          <button
+            type="button"
+            disabled={!picked || busy}
+            className={`${broadcastButton} bg-yellow disabled:bg-[#3a4566] disabled:text-mut`}
+            onClick={() => void create()}
+          >
             다음 · 복구 코드 받기
           </button>
         </div>
+        <p role="status" className="min-h-5 text-sm font-black text-[#FF8A80]">
+          {error ?? (failed ? OFFLINE_TEXT : "")}
+        </p>
       </div>
     </main>
   );

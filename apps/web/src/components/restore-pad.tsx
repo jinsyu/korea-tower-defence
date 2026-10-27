@@ -5,14 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { BugTag, broadcastButton } from "@/components/broadcast";
 import { fitTileText } from "@/components/code-tiles";
-import {
-  FAKE_GUARDIAN_NAME,
-  NO_ATTEMPTS,
-  RESTORE_TRIES_PER_HOUR,
-  lockMinutesLeft,
-  recentFails,
-  tryFakeRestore,
-} from "@/lib/fake-restore";
+import { saveDeviceKey } from "@/lib/device-key";
+import { callServer, OFFLINE_TEXT, type ServerMe } from "@/lib/game-server";
 import {
   DIGIT_SLOT,
   EMPTY_RESTORE_INPUT,
@@ -23,6 +17,8 @@ import {
   toRecoveryCode,
 } from "@/lib/restore-input";
 
+/** The server's limit per address (spec D5). */
+const RESTORE_TRIES_PER_HOUR = 10;
 const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"];
 const focusRing = "focus-visible:outline-3 focus-visible:-outline-offset-3 focus-visible:outline-yellow";
 const keyClass = `min-h-11 min-w-0 truncate px-0.5 ${focusRing}`;
@@ -41,7 +37,7 @@ export function RestorePad() {
   const router = useRouter();
   const [input, setInput] = useState(EMPTY_RESTORE_INPUT);
   const [initial, setInitial] = useState<CodeInitial>("ㄱ");
-  const [attempts, setAttempts] = useState(NO_ATTEMPTS);
+  const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<Message>(null);
   const [shakes, setShakes] = useState(0);
   const leaveTimer = useRef<number | undefined>(undefined);
@@ -54,28 +50,29 @@ export function RestorePad() {
     setMessage(null);
   };
 
-  const submit = () => {
-    if (!code) return;
-    const now = Date.now();
-    const { result, attempts: next } = tryFakeRestore(code, attempts, now);
-    setAttempts(next);
-    if (result === "ok") {
-      setMessage({ text: `다시 만나서 반가워요, ${FAKE_GUARDIAN_NAME}!`, kind: "ok" });
+  const submit = async () => {
+    if (!code || busy) return;
+    setBusy(true);
+    const res = await callServer<{ key: string; me: ServerMe }>("/restore", { method: "POST", body: code });
+    setBusy(false);
+    if (res.ok) {
+      saveDeviceKey(res.data.key);
+      setMessage({ text: `다시 만나서 반가워요, ${res.data.me.name} #${res.data.me.tag}!`, kind: "ok" });
       const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       leaveTimer.current = window.setTimeout(() => router.push("/play"), reduced ? 100 : 900);
       return;
     }
     setShakes((n) => n + 1);
-    if (result === "bad") {
-      const left = RESTORE_TRIES_PER_HOUR - recentFails(next, now);
+    if (res.status === 401) {
+      const left = Number(res.data.triesLeft ?? 0);
       setMessage({
         text: `코드가 맞지 않아요. 낱말 순서를 확인해 주세요 (1시간에 ${RESTORE_TRIES_PER_HOUR}번까지, 남은 ${left}번)`,
         kind: "bad",
       });
-    } else if (next !== attempts) {
-      setMessage({ text: `${RESTORE_TRIES_PER_HOUR}번 틀려서 1시간 동안 잠겼어요. 잠시 뒤에 다시 해요`, kind: "lock" });
+    } else if (res.status === 429) {
+      setMessage({ text: `잠시 뒤에 다시 해요 · ${Number(res.data.minutesLeft ?? 60)}분 남았어요`, kind: "lock" });
     } else {
-      setMessage({ text: `잠시 뒤에 다시 해요 · ${lockMinutesLeft(next, now)}분 남았어요`, kind: "lock" });
+      setMessage({ text: OFFLINE_TEXT, kind: "bad" });
     }
   };
 
@@ -174,8 +171,8 @@ export function RestorePad() {
           </button>
           <button
             type="button"
-            disabled={!code}
-            onClick={submit}
+            disabled={!code || busy}
+            onClick={() => void submit()}
             className={`${broadcastButton} bg-yellow disabled:bg-[#3a4566] disabled:text-mut`}
           >
             이어 하기

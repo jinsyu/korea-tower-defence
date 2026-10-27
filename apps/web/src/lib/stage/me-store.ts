@@ -1,6 +1,6 @@
 // My guardian, kept in one store. The board's my tower, the "나" row of the representative list, the level bar
 // and (T8) the my-guardian screen all read this one state, so they always show the same step (plan memo
-// "같은 상태에서 그리기"). Growth numbers are fake until the growth rules (T10-2) and the server (T12).
+// "같은 상태에서 그리기"). From T11 the store starts from the server's guardian; growth moves with the server in T12.
 import {
   boardTowers,
   EVO_NAMES,
@@ -11,8 +11,10 @@ import {
   type Guardian,
   type NextLook,
   type StageFile,
+  type Tendency,
   type TowerType,
 } from "@ktd/core";
+import type { ServerMe } from "@/lib/game-server";
 import type { GradeBandId } from "@/lib/grade-bands";
 import { FAKE_ME } from "./fake-region";
 import type { BannerTone, TowerInput } from "./sim";
@@ -28,6 +30,8 @@ export const STANCE_NAMES: Record<Stance, string> = { bal: "골고루", ...STAT_
 
 export type Me = Guardian & {
   band: GradeBandId;
+  /** Region code I defend. */
+  region: string;
   stance: Stance;
   level: number;
   /** Points ever earned; drives the level. */
@@ -58,8 +62,30 @@ export function createMeStore(initial: Me): MeStore {
   };
 }
 
-/** The one store for this page session (fake guardian until the server sends mine, T11–T12). */
+/** The one store for this page session. Screens behind the guardian gate fill it from the server first. */
 export const meStore = createMeStore(FAKE_ME);
+
+const STANCE_OF: Record<Tendency, Stance> = { balanced: "bal", power: "pow", speed: "spd", range: "rng", luck: "luck" };
+
+/** My guardian from the server, in the store's shape. Points in the last 24 hours arrive with the board (T12–T13). */
+export function meFromServer(s: ServerMe): Me {
+  return {
+    id: "me",
+    nick: s.name,
+    tag: s.tag,
+    type: s.towerType,
+    step: Number(s.stage),
+    pal: s.color,
+    pts24: 0,
+    joinedAt: 0,
+    band: s.band,
+    region: s.region,
+    stance: STANCE_OF[s.tendency],
+    level: Number(s.level),
+    xp: Number(s.points),
+    wallet: Number(s.wallet),
+  };
+}
 
 /** Points needed in total to reach level n (fake curve from mockup B). */
 export const needXP = (n: number): number => (n <= 1 ? 0 : Math.ceil(50 * Math.pow(n, 1.6)));

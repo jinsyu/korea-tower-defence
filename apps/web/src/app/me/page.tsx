@@ -1,3 +1,4 @@
+import { GuardianGate } from "@/components/guardian-gate";
 import { MeScreen } from "@/components/me/me-screen";
 import { pageMetadata } from "@/lib/site";
 
@@ -11,11 +12,13 @@ export const metadata = {
   robots: { index: false, follow: true },
 };
 
-// My guardian. Reads the same store as the defence screen (fake guardian until T11–T12).
+// My guardian. Reads the same store as the defence screen, filled from the server.
 export default function MePage() {
   return (
     <main className="min-h-dvh">
-      <MeScreen />
+      <GuardianGate>
+        <MeScreen />
+      </GuardianGate>
     </main>
   );
 }

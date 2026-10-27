@@ -2,6 +2,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { BugTag, broadcastButton } from "@/components/broadcast";
 import { DeleteRecord, NewRecoveryCode } from "@/components/info-actions";
+import { MySettings } from "@/components/my-settings";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata = pageMetadata({
@@ -10,9 +11,6 @@ export const metadata = pageMetadata({
     "놀이 방법, 서버에 저장하는 것과 저장하지 않는 것, 지도·도로 데이터의 출처와 라이선스, 수학 문제의 성취기준 근거를 적었어요. 복구 코드 새로 만들기와 내 기록 지우기도 여기서 해요.",
   path: "/info",
 });
-
-// Fake until T11: the guardian's next region-change date comes from the server.
-const FAKE_NEXT_REGION_CHANGE = "11월 25일";
 
 const boxClass = "grid gap-2 border-l-4 border-cyan bg-navy px-3 py-2.5 text-sm leading-[1.6] text-[#dfe7ff]";
 const listClass = "list-disc pl-5";
@@ -37,20 +35,6 @@ function Ext({ href, children }: { href: string; children: ReactNode }) {
   );
 }
 
-function SettingRow({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-3 bg-navy2 px-3 py-2.5">
-      <div className="min-w-0">
-        <h3 className="font-black text-white">{title}</h3>
-        <p className="text-[13px] text-mut">{children}</p>
-      </div>
-      <button type="button" disabled className="min-h-11 bg-[#3a4566] px-3 text-sm font-black whitespace-nowrap text-mut">
-        곧 열려요
-      </button>
-    </div>
-  );
-}
-
 export default function InfoPage() {
   return (
     <main className="grid flex-1 justify-items-center p-3.5">
@@ -71,14 +55,7 @@ export default function InfoPage() {
         </Section>
 
         <Section id="mine" title="내 지킴이 바꾸기">
-          <div className="grid gap-1.5">
-            <SettingRow title="학년군 바꾸기">바꾸면 그 학년군의 첫 단계부터 문제가 나와요. 포인트·레벨·타워는 그대로예요.</SettingRow>
-            <SettingRow title="지역 바꾸기">
-              처음 고른 뒤 24시간 안에는 한 번 바로 바꿀 수 있고, 그 뒤로는 30일에 한 번이에요. 다음에 바꿀 수 있는 날:{" "}
-              {FAKE_NEXT_REGION_CHANGE}
-            </SettingRow>
-            <SettingRow title="별명 바꾸기">목록에서 새 별명을 골라요. 뒤에 붙는 꼬리표 숫자는 새로 정해져요.</SettingRow>
-          </div>
+          <MySettings />
         </Section>
 
         <Section id="code" title="복구 코드">

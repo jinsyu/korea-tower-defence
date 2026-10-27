@@ -15,6 +15,7 @@ import {
   type PanelState,
 } from "@/lib/stage/math-panel";
 import { boardTowerInputs, gainPoints, levelUpText, meBarView, meStore, repRows, upgradeChange } from "@/lib/stage/me-store";
+import { regionName } from "@/lib/region-names";
 import { fmt, type StageEvent } from "@/lib/stage/sim";
 import { MathPanel } from "./math-panel";
 import { MeBar } from "./me-bar";
@@ -77,7 +78,8 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
  */
 export function DefenceScreen() {
   const { stage, failed, retry } = useStageFile();
-  const [region, setRegion] = useState<RegionHud>(FAKE_REGION);
+  // My region's name; its numbers stay fake until the region server (T13).
+  const [region, setRegion] = useState<RegionHud>(() => ({ ...FAKE_REGION, name: regionName(meStore.get().region) }));
   const [tick, setTick] = useState(0);
   // My guardian: one store read by the board, the representative list and the level bar.
   const me = useSyncExternalStore(meStore.subscribe, meStore.get, meStore.get);

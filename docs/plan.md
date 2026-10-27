@@ -347,7 +347,7 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
 
 ### T11: 게임 서버 1 — 지킴이, 복구 코드, 지역 고르기·바꾸기, 기록 지우기 (화면 연결) — DoD: D1, D3, D4, D5, D6, D7, D8, D26, D40(새 지킴이 한도), D54(일부), D69, D76
 
-- [ ] T11
+- [x] T11
 
 - `apps/server`
   - SQLite(WAL) 스키마: spec "서버 DB"
@@ -370,8 +370,9 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
   - D76 시계를 바꾼 시험
 - 검증 명령
   ```sh
-  pnpm test --filter server --filter core && pnpm --filter server build && pnpm --filter web build
+  pnpm test --project server --project core && pnpm --filter server typecheck && pnpm --filter web build
   ```
+  - 루트 `pnpm test`는 `vitest run`이라 `--filter`를 받지 않아 `--project`로 고쳤다. 게임 서버는 tsx로 TypeScript를 바로 실행해 빌드 단계가 없으므로 `build` 대신 `typecheck`를 쓴다.
 - 확인: 메인이 `/browse`로 처음 하기 → 방어 화면, 새로 고침 뒤 이어짐(D6), 다른 브라우저에서 복구 코드로 이어짐(D4)을 손으로 확인한다. 서버와 웹은 확인 뒤 끈다.
 - 완료 기준: 위 DoD(D3의 낱말 사람 검토와 D1의 E2E는 T19)
 

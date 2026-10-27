@@ -1,4 +1,4 @@
-import { RegionPicker } from "@/components/korea-map/region-picker";
+import { StartRegionPicker } from "@/components/start-flow";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata = {
@@ -14,7 +14,7 @@ export const metadata = {
 export default function RegionPage() {
   return (
     <main className="h-dvh overflow-hidden">
-      <RegionPicker />
+      <StartRegionPicker />
     </main>
   );
 }

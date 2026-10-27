@@ -48,6 +48,7 @@ export const FAKE_ME: Me = {
   pts24: 640,
   joinedAt: 3000,
   band: "12",
+  region: FAKE_REGION_CODE,
   stance: "bal",
   level: 23,
   xp: 7800,

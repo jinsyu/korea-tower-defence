@@ -1,9 +1,7 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 import { broadcastButton } from "@/components/broadcast";
-import { useStartFlow } from "@/components/start-flow";
 import { fakeRegionStats, type RegionStats } from "@/lib/fake-region-stats";
 import type { RegionShape } from "@/lib/korea-map";
 import { KoreaMapView, boxView, nationView } from "./korea-map-view";
@@ -15,12 +13,13 @@ const fmt = (n: number) => n.toLocaleString("ko-KR");
 const rowClass =
   "grid min-h-11 min-w-0 grid-cols-[2.6em_minmax(0,1fr)_auto] items-center gap-2 border-l-5 bg-navy2 px-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-yellow";
 
-export function RegionPicker() {
+export type PickedRegion = { code: string; name: string };
+
+/** `note` replaces the rule line under the title (e.g. why a change was refused); `busy` holds the pick button. */
+export function RegionPicker({ onPick, note, busy = false }: { onPick: (r: PickedRegion) => void; note?: string | null; busy?: boolean }) {
   const { map, failed, retry } = useKoreaMap();
   const [sido, setSido] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const { setRegion } = useStartFlow();
-  const router = useRouter();
 
   const regionByCode = useMemo(() => new Map(map?.regions.map((r) => [r.code, r])), [map]);
   const stats = useMemo(
@@ -49,8 +48,7 @@ export function RegionPicker() {
     setSelected(null);
   };
   const pick = (r: RegionShape) => {
-    setRegion({ code: r.code, name: r.name });
-    router.push("/start/nick");
+    if (!busy) onPick({ code: r.code, name: r.name });
   };
 
   return (
@@ -101,7 +99,9 @@ export function RegionPicker() {
       </div>
 
       <div className="grid min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] gap-1 [grid-area:side]">
-        <p className="truncate text-[13px] font-bold text-yellow">185곳 어디든 골라요 · 30일에 한 번 바꿀 수 있어요</p>
+        <p role="status" className="truncate text-[13px] font-bold text-yellow">
+          {note ?? "185곳 어디든 골라요 · 30일에 한 번 바꿀 수 있어요"}
+        </p>
         <div className="grid min-h-0 content-start gap-[3px] overflow-y-auto">
           {failed && (
             <button type="button" onClick={retry} className={`${broadcastButton} bg-yellow`}>

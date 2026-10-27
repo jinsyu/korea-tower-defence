@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { BugTag, broadcastButton } from "@/components/broadcast";
-import { CodeTiles } from "@/components/code-tiles";
-import { FAKE_RECOVERY_CODE } from "@/lib/fake-restore";
+import { CodeReveal } from "@/components/code-reveal";
 import { pageMetadata } from "@/lib/site";
 
 export const metadata = {
@@ -14,14 +13,14 @@ export const metadata = {
   robots: { index: false, follow: true },
 };
 
-// The code is fake until T11: the server makes it, shows it once and keeps only its hash.
+// The server makes the code, the screen shows it once, and the server keeps only its hash.
 export default function CodePage() {
   return (
     <main className="grid flex-1 place-items-center p-3.5">
       <div className="grid w-[min(900px,100%)] min-w-0 gap-3">
         <BugTag live="방송 준비 4/4">이 코드는 지금 한 번만 보여요</BugTag>
         <h1 className="font-heading text-[clamp(28px,4.4vw,64px)] leading-[1.05]">내 복구 코드예요</h1>
-        <CodeTiles code={FAKE_RECOVERY_CODE} />
+        <CodeReveal />
         <ul className="list-disc border-l-4 border-cyan bg-navy py-2.5 pr-3 pl-7 text-sm leading-[1.6] text-[#dfe7ff]">
           <li>
             <b>부모님께 보여 주거나 종이에 적어 두세요.</b>

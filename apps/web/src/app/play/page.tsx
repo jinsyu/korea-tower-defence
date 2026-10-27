@@ -1,3 +1,4 @@
+import { GuardianGate } from "@/components/guardian-gate";
 import { DefenceScreen } from "@/components/stage/defence-screen";
 import { pageMetadata } from "@/lib/site";
 
@@ -11,11 +12,14 @@ export const metadata = {
   robots: { index: false, follow: true },
 };
 
-// Defence screen. The board is the Pyeongchang test stage with fake region data until T13 and T16.
+// Defence screen for my guardian from the server. The board is the Pyeongchang test stage with fake region
+// numbers until T13 and T16; only the region name is mine.
 export default function PlayPage() {
   return (
     <main className="h-dvh min-h-0 overflow-hidden">
-      <DefenceScreen />
+      <GuardianGate>
+        <DefenceScreen />
+      </GuardianGate>
     </main>
   );
 }

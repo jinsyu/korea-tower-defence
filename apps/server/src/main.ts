@@ -1,9 +1,11 @@
 import { createGameServer } from "./app";
+import { configFromEnv } from "./config";
 
 const port = Number(process.env.PORT ?? 4000);
 const host = process.env.HOST ?? "127.0.0.1";
 
-const server = createGameServer();
+const server = createGameServer({ config: configFromEnv() });
+await server.maintenance();
 server.httpServer.listen(port, host, () => {
   console.log(`game server listening on http://${host}:${port}`);
 });

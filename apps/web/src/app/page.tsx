@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { BugTag, broadcastButton } from "@/components/broadcast";
 import { HomeMap } from "@/components/home-map";
+import { HomeRedirect } from "@/components/home-redirect";
 import { FAKE_NATION_ONLINE } from "@/lib/fake-region-stats";
 import { SITE_DESCRIPTION, pageMetadata } from "@/lib/site";
 
@@ -9,6 +10,7 @@ export const metadata = pageMetadata({ description: SITE_DESCRIPTION, path: "/" 
 export default function Home() {
   return (
     <main className="grid flex-1 place-items-center bg-[radial-gradient(ellipse_at_70%_40%,rgb(27_63_134/0.6),transparent_60%)] px-3.5 py-5 short-phone:py-3">
+      <HomeRedirect />
       <div className="grid w-full max-w-[1100px] min-w-0 justify-items-start gap-3.5 short-phone:gap-2.5 wide:grid-cols-[minmax(0,1.1fr)_minmax(0,1fr)] wide:items-center wide:gap-x-10">
         <BugTag live="LIVE">전국 185곳 · 지금 {FAKE_NATION_ONLINE.toLocaleString("ko-KR")}명 지키는 중</BugTag>
         <h1 className="font-heading text-[clamp(40px,7vw,96px)] leading-none">

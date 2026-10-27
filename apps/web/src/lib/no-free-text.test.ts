@@ -8,11 +8,10 @@ import HomePage from "@/app/page";
 import InfoPage from "@/app/info/page";
 import PlayPage from "@/app/play/page";
 import CodePage from "@/app/start/code/page";
-import { RegionPicker } from "@/components/korea-map/region-picker";
 import { GradePicker } from "@/components/grade-picker";
 import { NickPicker } from "@/components/nick-picker";
 import { RestorePad } from "@/components/restore-pad";
-import { StartFlowProvider } from "@/components/start-flow";
+import { StartFlowProvider, StartRegionPicker } from "@/components/start-flow";
 
 vi.mock("next/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), prefetch: vi.fn() }),
@@ -27,7 +26,7 @@ const render = (screen: ComponentType) =>
 const FLOW: [string, ComponentType][] = [
   ["home", HomePage],
   ["grade", GradePicker],
-  ["region", RegionPicker],
+  ["region", StartRegionPicker],
   ["nick", NickPicker],
   ["code", CodePage],
   ["play", PlayPage],

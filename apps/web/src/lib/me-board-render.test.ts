@@ -2,14 +2,15 @@ import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import BoardPage from "@/app/board/page";
-import MePage from "@/app/me/page";
+import { MeScreen } from "@/components/me/me-screen";
 
 const render = (page: ComponentType) => renderToStaticMarkup(createElement(page));
 const count = (html: string, re: RegExp) => (html.match(re) ?? []).length;
 const FREE_TEXT = /<input\b|<textarea\b|contenteditable/i;
 
+// The /me page puts this screen behind the guardian gate; the screen reads the store (here the fake guardian).
 describe("my-guardian screen (D53)", () => {
-  const html = render(MePage);
+  const html = render(MeScreen);
 
   it("shows level, step, the four stats, 5 stances, 3 tower types and 12 colours", () => {
     expect(html).toContain("Lv 23 · 47단계");

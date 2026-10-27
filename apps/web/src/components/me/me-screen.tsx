@@ -7,7 +7,7 @@ import { TowerCanvas } from "@/components/art/painted-canvas";
 import { pageQa, useDemoHooks } from "@/components/dev/use-demo-hooks";
 import { PALETTE } from "@/lib/art/palette";
 import { GRADE_BANDS } from "@/lib/grade-bands";
-import { FAKE_REGION } from "@/lib/stage/fake-region";
+import { regionName } from "@/lib/region-names";
 import {
   meScreenView,
   meStore,
@@ -135,7 +135,7 @@ export function MeScreen() {
               <TowerCanvas type={me.type} step={me.step} pal={me.pal} className="size-[clamp(112px,32vw,220px)]" />
               <div className="grid min-w-0 gap-1">
                 <small className="truncate text-xs font-black text-mut">
-                  {FAKE_REGION.name} 지킴이 · {band}
+                  {regionName(me.region)} 지킴이 · {band}
                 </small>
                 <b className="truncate font-heading text-[clamp(20px,2.4vw,34px)] font-normal">
                   {me.nick} #{me.tag}

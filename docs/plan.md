@@ -228,7 +228,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T7: 방어 화면 2 — 문제 패널, 레벨 막대, 대표 목록, 띠, 지난 소식, 연결 끊김 — DoD: D41, D42, D66(띠), D58(화면 부분)
 
-- [ ] T7
+- [x] T7
 - 기준 시안: `option-b.html?screen=stage`, `?screen=stage-wrong`, `?screen=stage-away`, `?screen=stage-34`, `?screen=stage-56`, 데모 `right`, `wrong`, `streak5`, `down3`, `fast`, `guess`, `daily`, `upgrade`, `newlook`, `material`, `evolve`, `levelup`, `offline`
 
 - 문제 패널(가짜 문제 목록)

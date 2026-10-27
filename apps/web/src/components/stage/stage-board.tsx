@@ -53,12 +53,14 @@ type Props = {
   stage: StageFile;
   towers: TowerInput[];
   region: RegionState;
+  /** Connection lost: the board stands still under a notice (D58). */
+  offline: boolean;
   onEvent: (e: StageEvent) => void;
   onReady: (api: BoardApi | null) => void;
 };
 
 /** The defence board: canvas, name labels, banner, tip and credit. The board is watched, never touched. */
-export function StageBoard({ stage, towers, region, onEvent, onReady }: Props) {
+export function StageBoard({ stage, towers, region, offline, onEvent, onReady }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export function StageBoard({ stage, towers, region, onEvent, onReady }: Props) {
   const initialRegion = useEffectEvent(() => region);
   const initialTowers = useEffectEvent(() => towers);
   const displayFont = useEffectEvent(() => font);
+  const isOffline = useEffectEvent(() => offline);
 
   useEffect(() => {
     const map = mapRef.current!;
@@ -200,7 +203,7 @@ export function StageBoard({ stage, towers, region, onEvent, onReady }: Props) {
     const frame = (now: number) => {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
-      sim.update(dt);
+      if (!isOffline()) sim.update(dt);
       if (view && bg) towersDrawn = drawFrame(g, sim, view, bg, { display: displayFont(), sans }).towersDrawn;
       if (waveBarRef.current) {
         waveBarRef.current.style.width = `${(Math.min(1, sim.waveT / stage.pace.waveSec) * 100).toFixed(1)}%`;
@@ -328,6 +331,13 @@ export function StageBoard({ stage, towers, region, onEvent, onReady }: Props) {
       </div>
       <div ref={bannerRef} className={`${BANNER_BASE} ${BANNER_TONE.yellow} -translate-x-[105%]`} data-qa-ignore />
       <div ref={tipRef} className={`${TIP_BASE} translate-y-2.5 opacity-0`} data-qa-ignore />
+      {offline && (
+        <div data-slot="map-offline" className="pointer-events-none absolute inset-0 z-4 grid place-items-center bg-[rgba(6,16,42,.72)]" role="status">
+          <span className="max-w-[calc(100%-16px)] truncate border-l-6 border-mut bg-black px-3.5 py-2 text-[15px] font-black">
+            중계 연결이 끊겼어요, 다시 잇는 중…
+          </span>
+        </div>
+      )}
       <div ref={confettiRef} className="pointer-events-none fixed inset-0 z-50 overflow-hidden" aria-hidden="true" />
     </div>
   );

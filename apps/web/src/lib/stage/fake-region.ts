@@ -1,5 +1,6 @@
 // Fake region and guardians for the defence screen until the game server (T11–T13) sends them.
 import { NICK_ADJECTIVES, NICK_NOUNS, TOWER_TYPES, type Guardian } from "@ktd/core";
+import type { Me } from "./me-store";
 import { seededRng } from "./sim";
 
 export type RegionHud = {
@@ -25,7 +26,8 @@ export const FAKE_REGION: RegionHud = {
   rank: 57,
 };
 
-export const FAKE_ME: Guardian = {
+/** Mockup B "씩씩한 수달": level 23, step 47, 580 points toward the next step. */
+export const FAKE_ME: Me = {
   id: "me",
   nick: "씩씩한 수달",
   tag: "0427",
@@ -34,6 +36,10 @@ export const FAKE_ME: Guardian = {
   pal: 0,
   pts24: 640,
   joinedAt: 3000,
+  band: "12",
+  level: 23,
+  xp: 7800,
+  wallet: 580,
 };
 
 /** count guardians with seeded names, types and points; the top three get steps 512, 318 and 205 like the mockup. */

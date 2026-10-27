@@ -5,44 +5,15 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEve
 import { broadcastButton } from "@/components/broadcast";
 import { useStartFlow } from "@/components/start-flow";
 import { fakeRegionStats, type RegionStats } from "@/lib/fake-region-stats";
-import type { KoreaMap, RegionShape } from "@/lib/korea-map";
-import { KOREA_MAP_URL } from "@/lib/korea-map-url";
+import type { RegionShape } from "@/lib/korea-map";
 import { KoreaMapView, boxView, nationView } from "./korea-map-view";
+import { useKoreaMap } from "./use-korea-map";
 
 const TITLE = "어느 지역을 지킬까요?";
 const fmt = (n: number) => n.toLocaleString("ko-KR");
 
 const rowClass =
   "grid min-h-11 min-w-0 grid-cols-[2.6em_minmax(0,1fr)_auto] items-center gap-2 border-l-5 bg-navy2 px-2.5 text-left focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-yellow";
-
-function useKoreaMap() {
-  const [map, setMap] = useState<KoreaMap | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    let alive = true;
-    fetch(KOREA_MAP_URL)
-      .then((res) => {
-        if (!res.ok) throw new Error(`korea map ${res.status}`);
-        return res.json() as Promise<KoreaMap>;
-      })
-      .then((data) => alive && setMap(data))
-      .catch((err: unknown) => {
-        console.error(err);
-        if (alive) setFailed(true);
-      });
-    return () => {
-      alive = false;
-    };
-  }, [attempt]);
-
-  const retry = () => {
-    setFailed(false);
-    setAttempt((n) => n + 1);
-  };
-  return { map, failed, retry };
-}
 
 export function RegionPicker() {
   const { map, failed, retry } = useKoreaMap();

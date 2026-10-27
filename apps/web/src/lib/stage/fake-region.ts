@@ -1,5 +1,7 @@
 // Fake region and guardians for the defence screen until the game server (T11–T13) sends them.
 import { NICK_ADJECTIVES, NICK_NOUNS, TOWER_TYPES, type Guardian } from "@ktd/core";
+import index from "../../../../../data/source/gojang/regions/20261001/index.json";
+import { fakeBoardStats, type BoardStats } from "@/lib/fake-board-stats";
 import type { Me } from "./me-store";
 import { seededRng } from "./sim";
 
@@ -14,17 +16,26 @@ export type RegionHud = {
   rank: number;
 };
 
+/** Region code of the Pyeongchang test stage, the fake "우리 지역" until the server knows mine (T11). */
+export const FAKE_REGION_CODE = "32540";
+
 /** Mockup B numbers for Pyeongchang. */
-export const FAKE_REGION: RegionHud = {
-  name: "평창군",
-  guardians: 4218,
-  online: 1036,
-  wave: 1284,
-  best: 1290,
-  power: 8.2e12,
-  perSec: 38,
-  rank: 57,
-};
+const MY_REGION = { name: "평창군", guardians: 4218, online: 1036, wave: 1284, best: 1290, power: 8.2e12, perSec: 38 };
+
+const SIDO_OF = new Map(index.sigungu.map((r) => [r.code, r.sidoCode]));
+
+/**
+ * The fake national board (all 185 regions) both the board and the defence screen read, so my region's rank
+ * is the same in both places. Mockup B: Pyeongchang solved 53,214 problems today with 1,290 guardians.
+ */
+export const FAKE_BOARD: BoardStats = fakeBoardStats([...SIDO_OF.keys()], (code) => SIDO_OF.get(code)!, {
+  code: FAKE_REGION_CODE,
+  ...MY_REGION,
+  today: 53214,
+  solvers: 1290,
+});
+
+export const FAKE_REGION: RegionHud = { ...MY_REGION, rank: FAKE_BOARD.regions.get(FAKE_REGION_CODE)!.rankWave! };
 
 /** Mockup B "씩씩한 수달": level 23, step 47, 580 points toward the next step. */
 export const FAKE_ME: Me = {
@@ -37,6 +48,7 @@ export const FAKE_ME: Me = {
   pts24: 640,
   joinedAt: 3000,
   band: "12",
+  stance: "bal",
   level: 23,
   xp: 7800,
   wallet: 580,
@@ -64,17 +76,4 @@ export function fakeGuardians(count: number, seed = 9001): Guardian[] {
     if (top[i]) top[i].step = step;
   });
   return out;
-}
-
-const UNITS: [number, string][] = [
-  [1e16, "경"],
-  [1e12, "조"],
-  [1e8, "억"],
-  [1e4, "만"],
-];
-
-/** Big Korean number: 8.2조. */
-export function fmtBig(n: number): string {
-  for (const [u, s] of UNITS) if (n >= u) return `${(n / u).toFixed(1).replace(/\.0$/, "")}${s}`;
-  return Math.round(n).toLocaleString("ko-KR");
 }

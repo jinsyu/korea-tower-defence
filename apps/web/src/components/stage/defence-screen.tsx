@@ -1,9 +1,9 @@
 "use client";
 
-import { parseStageFile, type StageFile } from "@ktd/core";
+import { formatBig, parseStageFile, type StageFile } from "@ktd/core";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { broadcastButton } from "@/components/broadcast";
-import { FAKE_REGION, fakeGuardians, fmtBig, type RegionHud } from "@/lib/stage/fake-region";
+import { FAKE_REGION, fakeGuardians, type RegionHud } from "@/lib/stage/fake-region";
 import {
   advanceDelay,
   answerProblem,
@@ -146,7 +146,7 @@ export function DefenceScreen() {
     meStore.set(g.me);
     if (g.me.level > g.fromLevel) {
       setLevelBump((n) => n + 1);
-      api?.tip(levelUpText(g.me.level), 2400);
+      api?.tip(levelUpText(g.me.level, g.me.stance), 2400);
     }
   }, []);
 
@@ -212,10 +212,10 @@ export function DefenceScreen() {
       </div>
       <div className="flex min-w-0 items-center gap-2.5 overflow-hidden text-xs leading-5 font-bold whitespace-nowrap text-mut [grid-area:strip] wide-or-landscape:text-[13px] wide-or-landscape:leading-[22px]">
         <span>
-          화력 <b className="text-yellow">{fmtBig(region.power)}</b>
+          화력 <b className="text-yellow">{formatBig(region.power)}</b>
         </span>
         <span>
-          적 <b className="text-white">{fmtBig(region.power * 0.97)}</b>
+          적 <b className="text-white">{formatBig(region.power * 0.97)}</b>
         </span>
         <span>
           지금 <b className="text-white">{fmt(region.online)}</b>명

@@ -5,17 +5,30 @@ import {
   boardTowers,
   EVO_NAMES,
   lookOf,
+  nextLook,
   MAT_NAMES,
   TIER_NAMES,
   type Guardian,
+  type NextLook,
   type StageFile,
+  type TowerType,
 } from "@ktd/core";
 import type { GradeBandId } from "@/lib/grade-bands";
 import { FAKE_ME } from "./fake-region";
 import type { BannerTone, TowerInput } from "./sim";
 
+export const STAT_KEYS = ["pow", "spd", "rng", "luck"] as const;
+export type StatKey = (typeof STAT_KEYS)[number];
+export const STAT_NAMES: Record<StatKey, string> = { pow: "힘", spd: "빠르기", rng: "멀리", luck: "행운" };
+
+/** How stat points are shared out: evenly, or one stat getting twice the others (spec "아이가 고르는 것"). */
+export const STANCES = ["bal", ...STAT_KEYS] as const;
+export type Stance = (typeof STANCES)[number];
+export const STANCE_NAMES: Record<Stance, string> = { bal: "골고루", ...STAT_NAMES };
+
 export type Me = Guardian & {
   band: GradeBandId;
+  stance: Stance;
   level: number;
   /** Points ever earned; drives the level. */
   xp: number;
@@ -70,10 +83,43 @@ export function upgradeChange(from: number, to: number): UpgradeChange | null {
   return { kind: "up", text: `내 타워 ${to}단계!`, tone: "yellow", ms: 1300 };
 }
 
-const STAT_NAMES = ["힘", "빠르기", "멀리", "행운"] as const;
+export type Stats = Record<StatKey, number>;
 
-/** Level-up notice; with the balanced stance each level adds one point to the next stat in turn. */
-export const levelUpText = (level: number): string => `레벨 ${level}! ${STAT_NAMES[(level - 2 + 4) % 4]} +1`;
+/**
+ * One stat point per level after the first, shared by the stance: "bal" deals them out in turn, a one-stat stance
+ * gives that stat 2 : 1 : 1 : 1 (mockup B; the real rule lands in core with T10-2). Changing the stance re-deals all.
+ */
+export function statsOf(level: number, stance: Stance): Stats {
+  const pts = Math.max(0, level - 1);
+  const out: Stats = { pow: 0, spd: 0, rng: 0, luck: 0 };
+  if (stance === "bal") {
+    for (let i = 0; i < pts; i++) out[STAT_KEYS[i % 4]!]++;
+    return out;
+  }
+  out[stance] = Math.round((pts * 2) / 5);
+  const rest = pts - out[stance];
+  STAT_KEYS.filter((k) => k !== stance).forEach((k, i) => {
+    out[k] = Math.floor(rest / 3) + (i < rest % 3 ? 1 : 0);
+  });
+  return out;
+}
+
+/** Level-up notice naming the stat that got the new point under my stance. */
+export function levelUpText(level: number, stance: Stance): string {
+  const now = statsOf(level, stance);
+  const before = statsOf(level - 1, stance);
+  const gained = STAT_KEYS.find((k) => now[k] > before[k]) ?? STAT_KEYS[0];
+  return `레벨 ${level}! ${STAT_NAMES[gained]} +1`;
+}
+
+/** Colours open: one at the start and one more every 10 levels, 12 in all. */
+export const openColors = (level: number): number => Math.min(12, 1 + Math.floor(level / 10));
+
+// Choices on the my-guardian screen. They change the picture only, never the power (spec D47).
+export const withType = (me: Me, type: TowerType): Me => ({ ...me, type });
+export const withStance = (me: Me, stance: Stance): Me => ({ ...me, stance });
+/** A locked colour is ignored. */
+export const withPal = (me: Me, pal: number): Me => (pal >= 0 && pal < openColors(me.level) ? { ...me, pal } : me);
 
 export type Gain = { me: Me; fromStep: number; fromLevel: number };
 
@@ -144,5 +190,48 @@ export function meBarView(me: Me): MeBarView {
     levelPct: Math.floor(clamp01((me.xp - l0) / (l1 - l0)) * 100),
     upgradePct: Math.floor(clamp01(me.wallet / upCost(me.step)) * 100),
     step: me.step,
+  };
+}
+
+/** Steps shown as "언젠가의 목표" on the my-guardian screen (mockup B: evolution, material and rim thresholds). */
+export const PREVIEW_STEPS: readonly (readonly [number, string])[] = [
+  [1, "I · 나무"],
+  [10, "돌"],
+  [25, "II · 철"],
+  [50, "청동 · 초록 테"],
+  [100, "III · 은 · 파랑 테"],
+  [200, "IV · 금 · 보라 테"],
+  [500, "V · 프리즘 · 금 테 ★"],
+];
+
+export type MeScreenView = {
+  level: number;
+  step: number;
+  /** Points still needed for the next tower step / level. */
+  toUpgrade: number;
+  toLevel: number;
+  upgradePct: number;
+  /** Steps until the next decoration (every 5 steps). */
+  toDecoration: number;
+  stats: Stats;
+  colorsOpen: number;
+  previews: { step: number; label: string; now: boolean }[];
+  next: NextLook | null;
+};
+
+export function meScreenView(me: Me): MeScreenView {
+  const bar = meBarView(me);
+  const reached = PREVIEW_STEPS.filter(([s]) => me.step >= s).at(-1)?.[0];
+  return {
+    level: me.level,
+    step: me.step,
+    toUpgrade: Math.max(0, upCost(me.step) - me.wallet),
+    toLevel: Math.max(0, needXP(me.level + 1) - me.xp),
+    upgradePct: bar.upgradePct,
+    toDecoration: 5 - (me.step % 5),
+    stats: statsOf(me.level, me.stance),
+    colorsOpen: openColors(me.level),
+    previews: PREVIEW_STEPS.map(([step, label]) => ({ step, label, now: step === reached })),
+    next: nextLook(me.step),
   };
 }

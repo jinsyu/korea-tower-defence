@@ -253,7 +253,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T8: 내 지킴이 화면과 전국 상황판 (가짜 데이터) — DoD: D53(화면), D59(화면), D60, D61
 
-- [ ] T8
+- [x] T8
 - 기준 시안: `option-b.html?screen=me`(데모 `me-type`, `me-stance`, `me-color`, `me-500`), `?screen=board`(데모 `board-tab`, `board-mine`, `board-empty`)
 
 - 내 지킴이 화면

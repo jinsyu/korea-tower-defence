@@ -13,7 +13,7 @@ export const FAKE_NATION_ONLINE = 48210;
 
 const BIG_CITY_SIDO = new Set(["11", "21", "22", "23", "24", "25", "26", "31"]);
 
-function hash(s: string): number {
+export function hash(s: string): number {
   let h = 2166136261;
   for (const c of s) {
     h ^= c.charCodeAt(0);
@@ -22,7 +22,12 @@ function hash(s: string): number {
   return h >>> 0;
 }
 
-export function fakeRegionStats(codes: string[], sidoOf: (code: string) => string): Map<string, RegionStats> {
+/** `overrides` replace a region's numbers before the bands are cut (my region shows the defence screen's numbers). */
+export function fakeRegionStats(
+  codes: string[],
+  sidoOf: (code: string) => string,
+  overrides?: ReadonlyMap<string, Omit<RegionStats, "band">>,
+): Map<string, RegionStats> {
   const stats = new Map<string, RegionStats>();
   for (const code of codes) {
     const h = hash(code);
@@ -30,7 +35,7 @@ export function fakeRegionStats(codes: string[], sidoOf: (code: string) => strin
     if (h % 53 === 7) guardians = 0;
     const best = guardians ? Math.round(900 + 110 * Math.log10(guardians) + (h % 97)) : 0;
     const online = Math.round(guardians * (0.1 + (h % 20) / 100));
-    stats.set(code, { guardians, best, online, band: -1 });
+    stats.set(code, { guardians, best, online, ...overrides?.get(code), band: -1 });
   }
 
   const bests = [...stats.values()].filter((s) => s.guardians).map((s) => s.best).sort((a, b) => a - b);

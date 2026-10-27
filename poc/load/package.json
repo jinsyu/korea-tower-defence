@@ -1,0 +1,25 @@
+{
+  "name": "ktd-load-poc",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "seed": "tsx seed.ts",
+    "server": "tsx server.ts",
+    "s1": "tsx run.ts s1",
+    "s2": "tsx run.ts s2",
+    "s3": "tsx run.ts s3",
+    "s4": "tsx run.ts s4",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "13.0.3",
+    "socket.io": "4.8.4",
+    "tsx": "4.23.15"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "^22.20.5",
+    "socket.io-client": "4.8.4",
+    "typescript": "7.0.2"
+  }
+}

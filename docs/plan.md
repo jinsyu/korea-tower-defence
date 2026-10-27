@@ -41,7 +41,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 - Lightsail 2GB 흉내
   - 서버만 Docker 컨테이너 `ktd-load`에서 돌린다: `--cpus=1 --memory=768m --memory-swap=768m`(systemd `MemoryMax=768M`과 같은 몫)
   - Lightsail은 버스트형 CPU라 오래 돌면 더 느려질 수 있다. 그래서 CPU를 1개로 묶어 보수적으로 잰다.
-  - 부하 발생기는 컨테이너 밖 맥에서 돌린다. 시작 전에 `ulimit -n 65536`.
+  - 부하 발생기는 서버 제한 밖에서 돌린다. 공식 측정은 같은 Docker 네트워크의 발생기 컨테이너(`poc/load/gen.sh`, CPU 제한 없음)로 한다. 맥 포트 포워더 경로(`pnpm -C poc/load s1` 등, 시작 전 `ulimit -n 65536`)는 참고로만 잰다(2026-10-27 T1 결과).
 - 시나리오와 통과 기준
 
 | 시나리오 | 내용 | 통과 기준 |
@@ -74,9 +74,11 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
   pnpm -C poc/load seed                    # 지킴이 50,000명 DB
   # 서버 이미지는 poc/load/Dockerfile(node:22-slim)에서 의존성을 컨테이너 안에서 설치한다(better-sqlite3는 맥에서 만든 것을 쓸 수 없음)
   docker build -t ktd-load poc/load
-  docker run -d --name ktd-load --cpus=1 --memory=768m --memory-swap=768m -p 127.0.0.1:4100:4100 -v ktd-load-db:/data ktd-load
-  pnpm -C poc/load s1 && pnpm -C poc/load s2 && pnpm -C poc/load s3
-  docker rm -f ktd-load && docker volume rm ktd-load-db   # 끝나면 반드시 끔(다른 컨테이너는 건드리지 않음)
+  docker network create ktd-load-net
+  docker run -d --name ktd-load --network ktd-load-net --cpus=1 --memory=768m --memory-swap=768m -p 127.0.0.1:4100:4100 -v ktd-load-db:/data -e SQLITE_DRIVER=better ktd-load
+  # 발생기는 같은 Docker 네트워크의 컨테이너(ktd-load-gen)에서 돈다. 맥 포트 포워더가 지연·누락을 더해 측정을 흔들기 때문(docs/poc/load-poc.md)
+  poc/load/gen.sh s1 && poc/load/gen.sh s2 && poc/load/gen.sh s3   # s3은 docker 소켓으로 ktd-load를 kill·start
+  docker rm -f ktd-load && docker volume rm ktd-load-db && docker network rm ktd-load-net && docker rmi ktd-load   # 끝나면 반드시 끔(다른 컨테이너는 건드리지 않음)
   ```
 - 완료 기준
   - S1~S3이 모두 통과한다. 하나라도 실패하면 "실패하면 바꿀 것"을 적용한 결과와 사용자 결정 요청이 기록에 있다.

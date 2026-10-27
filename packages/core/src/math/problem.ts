@@ -1,10 +1,14 @@
 // A generated problem and the shared step that turns an answer and its wrong-answer candidates into four choices.
 import type { MathBand, MathLevel, ProblemType } from "./levels";
 import type { Rng } from "./random";
-import { plainText, quotientText, type MathText } from "./text";
+import { decimalPlaces, sub, type Rational } from "./rational";
+import { fractionText, plainText, quotientText, type MathText } from "./text";
 
-/** A choice's value: a number, or a quotient with its remainder. Choices are marked by value. */
-export type ChoiceValue = number | { q: number; r: number };
+/**
+ * A choice's value: a number, a quotient with its remainder, or an exact fraction (5~6학년, also for decimals).
+ * Choices are marked by value; fractions are always shown in lowest terms, so equal values never look different.
+ */
+export type ChoiceValue = number | { q: number; r: number } | Rational;
 
 export type Problem = {
   band: MathBand;
@@ -71,6 +75,24 @@ export const quotientRules = (divisor: number, maxQuotient: number): ChoiceRules
   key: (v) => `${v.q}r${v.r}`,
 });
 
+/**
+ * Fractions and decimals of a 5~6학년 type: positive, below `max`, a reduced denominator up to `maxDen`, and for
+ * decimals at most three places (no fourth place). ±1 means a value exactly one away.
+ */
+export const rationalRules = (opts: { max: number; maxDen: number; decimal?: boolean }): ChoiceRules<Rational> => ({
+  valid: (v) => {
+    if (v.n <= 0 || v.n >= opts.max * v.d || v.d > opts.maxDen) return false;
+    if (!opts.decimal) return true;
+    const places = decimalPlaces(v);
+    return places !== null && places <= 3;
+  },
+  near: (v, a) => {
+    const diff = sub(v, a);
+    return diff.d === 1 && Math.abs(diff.n) === 1;
+  },
+  key: (v) => `${v.n}/${v.d}`,
+});
+
 type Draft<V> = {
   type: ProblemType;
   expr: MathText;
@@ -78,9 +100,12 @@ type Draft<V> = {
   candidates: Iterable<V>;
   rules: ChoiceRules<V>;
   solution: { text: MathText; result: MathText };
+  /** How a choice is drawn; fractions by default. Decimal problems pass `decimalText`. */
+  show?: (v: V) => MathText;
 };
 
-const valueText = (v: ChoiceValue): MathText => (typeof v === "number" ? [String(v)] : quotientText(v.q, v.r));
+const valueText = (v: ChoiceValue): MathText =>
+  typeof v === "number" ? [String(v)] : "q" in v ? quotientText(v.q, v.r) : fractionText(v);
 
 export function finishProblem<V extends ChoiceValue>(rng: Rng, band: MathBand, level: MathLevel, d: Draft<V>): Problem {
   const { values, answer } = pickChoices(rng, d.answer, d.candidates, d.rules);
@@ -91,7 +116,7 @@ export function finishProblem<V extends ChoiceValue>(rng: Rng, band: MathBand, l
     standards: d.type.standards,
     key: plainText(d.expr),
     expr: d.expr,
-    choices: values.map(valueText) as Problem["choices"],
+    choices: values.map(d.show ?? valueText) as Problem["choices"],
     values,
     answer,
     solution: d.solution,

@@ -291,7 +291,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T9-2: 수학 생성기 — 5~6학년군(분수·소수) — DoD: D27~D31 완료
 
-- [ ] T9-2
+- [x] T9-2
 - 기준 시안: `option-b.html?screen=stage-56`(분수 세로꼴)
 
 - `packages/core/math/rational.ts`: 직접 만든 유리수 모듈(새 라이브러리 없음)

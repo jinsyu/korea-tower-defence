@@ -1,6 +1,6 @@
 "use client";
 
-import { boardTowers, type Guardian, type StageFile } from "@ktd/core";
+import { boardTowers, generateProblem, type Guardian, type StageFile } from "@ktd/core";
 import { useEffect, useRef } from "react";
 import type { GradeBandId } from "@/lib/grade-bands";
 import { FAKE_ME, FAKE_REGION, type RegionHud } from "@/lib/stage/fake-region";
@@ -89,9 +89,15 @@ export function useDevHooks(
       meStore.set({ ...meStore.get(), step, wallet: upCost(step) - 5 });
       clickOpt("right", fresh());
     };
+    /** `&level=3&seed=4973&type=분수 나눗셈` in the address opens that exact generated problem (screen checks). */
     const setBand = (band: GradeBandId) => {
       meStore.set({ ...meStore.get(), band });
-      actionsRef.current.setPanel(newPanel(band, Date.now()));
+      const q = new URLSearchParams(window.location.search);
+      const level = Number(q.get("level") ?? 1) as 1 | 2 | 3;
+      const seed = Number(q.get("seed") ?? 0);
+      const panel = newPanel(band, Date.now(), level);
+      const problem = generateProblem(band, level, seed, q.get("type") ?? undefined);
+      actionsRef.current.setPanel({ ...panel, dealt: seed, problem });
     };
 
     const demo = (name: DemoName) => {

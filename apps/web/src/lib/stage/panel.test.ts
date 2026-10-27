@@ -18,7 +18,8 @@ import {
 } from "@ktd/core";
 import { describe, expect, it } from "vitest";
 import { GRADE_BANDS } from "@/lib/grade-bands";
-import { FAKE_PROBLEMS, spoken, type FakeProblem } from "./fake-problems";
+import { josa, type Problem } from "@ktd/core";
+import { spoken } from "./spoken";
 import { FAKE_ME, fakeGuardians } from "./fake-region";
 import {
   advanceDelay,
@@ -121,16 +122,13 @@ const headerWidth = (text: string) => [...text].reduce((w, c) => w + (/[가-힣]
 /** 360px: 344px row − "문제" tag 50px − skip button 88px − text padding 20px. */
 const HEADER_ROOM_360 = 344 - 50 - 88 - 20;
 
-/** Generated 1~2·3~4학년 problems (every level, many seeds) and the fake 5~6학년 list. */
-const SAMPLE_PROBLEMS: FakeProblem[] = [
-  ...(["12", "34"] as const).flatMap((band) =>
-    ([1, 2, 3] as const).flatMap((level) => Array.from({ length: 200 }, (_, seed) => generateProblem(band, level, seed))),
-  ),
-  ...FAKE_PROBLEMS,
-];
+/** Generated problems of every band and level, many seeds. */
+const SAMPLE_PROBLEMS: Problem[] = (["12", "34", "56"] as const).flatMap((band) =>
+  ([1, 2, 3] as const).flatMap((level) => Array.from({ length: 200 }, (_, seed) => generateProblem(band, level, seed))),
+);
 
 describe("header line (D42)", () => {
-  const panelFor = (p: FakeProblem): PanelState => ({ ...newPanel(p.band, 0, p.level), problem: p });
+  const panelFor = (p: Problem): PanelState => ({ ...newPanel(p.band, 0, p.level), problem: p });
 
   it("is \"학년군 · 유형\" for every problem, with no level number or level word", () => {
     for (const p of SAMPLE_PROBLEMS) {
@@ -162,14 +160,37 @@ describe("header line (D42)", () => {
   });
 });
 
-describe("fake problems (5~6학년 until T9-2)", () => {
-  it("have four different choices and an answer for every level", () => {
-    for (const level of [1, 2, 3]) expect(FAKE_PROBLEMS.some((p) => p.band === "56" && p.level === level)).toBe(true);
-    for (const p of FAKE_PROBLEMS) expect(new Set(p.choices.map((c) => JSON.stringify(c))).size).toBe(4);
+describe("spoken math", () => {
+  it("reads fractions and mixed numbers aloud", () => {
+    expect(spoken([{ fr: [3, 4] }, " + ", { fr: [1, 2] }])).toBe("4분의 3 더하기 2분의 1");
+    expect(spoken([{ fr: [3, 4], w: 1 }, " − ", { fr: [1, 3], w: 2 }])).toBe("1과 4분의 3 빼기 2와 3분의 1");
   });
 
-  it("reads fractions aloud", () => {
-    expect(spoken([{ fr: [3, 4] }, " + ", { fr: [1, 2] }])).toBe("4분의 3 더하기 2분의 1");
+  it("reads \"=\" as 은 or 는 to fit the word before it", () => {
+    const blank = { blank: true } as const;
+    expect(spoken(["4.32 ÷ 3.6 = ", blank])).toBe("4.32 나누기 3.6은 빈칸");
+    expect(spoken(["7 × 8 = ", blank])).toBe("7 곱하기 8은 빈칸");
+    expect(spoken(["4 × 9 = ", blank])).toBe("4 곱하기 9는 빈칸");
+    expect(spoken([{ fr: [3, 4] }, " + ", { fr: [1, 2] }, " = ", blank])).toBe("4분의 3 더하기 2분의 1은 빈칸");
+    expect(spoken([{ fr: [2, 5], w: 1 }, " × 3 = ", blank])).toBe("1과 5분의 2 곱하기 3은 빈칸");
+    expect(spoken([{ fr: [3, 5] }, " × 2 = ", blank])).toBe("5분의 3 곱하기 2는 빈칸");
+    expect(spoken([blank, " × 4 = 28"])).toBe("빈칸 곱하기 4는 28");
+    expect(spoken(["0.25 × 0.4 = ", blank])).toBe("0.25 곱하기 0.4는 빈칸");
+  });
+
+  it("picks the particle after \"=\" right in every band's expressions", () => {
+    for (const p of SAMPLE_PROBLEMS) {
+      const s = spoken(p.expr);
+      expect(s, p.key).not.toMatch(/ 는 | = /);
+      const m = /(\S+?)(은|는) /.exec(s);
+      expect(m, `${p.key} → ${s}`).not.toBeNull();
+      expect(josa(m![1]!, "은"), `${p.key} → ${s}`).toBe(m![1]! + m![2]!);
+    }
+  });
+
+  it("deals 5~6학년 problems from the generator on the panel", () => {
+    expect(newPanel("56", 0, 1).problem.type).toMatch(/^분수 (덧셈|뺄셈)$/);
+    expect(newPanel("56", 0, 3).problem.type).toMatch(/^(분수|소수) 나눗셈$/);
   });
 });
 

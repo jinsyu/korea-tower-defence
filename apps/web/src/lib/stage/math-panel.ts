@@ -1,8 +1,7 @@
-// Problem panel state on the screen (fake until the server deals and marks problems, T12).
+// Problem panel state on the screen (dealt and marked here until the server takes over, T12).
 // Rules shown here follow spec "문제 흐름과 포인트", "난이도 이동" and "찍기·매크로·반복 막기".
-import { generateProblem, type MathLevel } from "@ktd/core";
+import { generateProblem, type Problem } from "@ktd/core";
 import { GRADE_BANDS, type GradeBandId } from "@/lib/grade-bands";
-import { fakeProblemsFor, type FakeProblem } from "./fake-problems";
 
 /** Points per correct answer by level (spec: 10, 12, 15). */
 export const LEVEL_POINTS = [10, 12, 15] as const;
@@ -26,10 +25,10 @@ export type PanelState = {
   level: 1 | 2 | 3;
   streak: number;
   wrongStreak: number;
-  /** Problems dealt so far; the seed of the next generated problem (or the next fake 5~6학년 problem). */
+  /** Problems dealt so far; the seed of the next generated problem. */
   dealt: number;
   /** The open problem. A level change applies from the next one. */
-  problem: FakeProblem;
+  problem: Problem;
   /** Date.now() when the current problem appeared. */
   shownAt: number;
   answered: Answered | null;
@@ -50,11 +49,7 @@ export type AnswerOutcome = {
   levelDown: boolean;
 };
 
-function deal(band: GradeBandId, level: number, dealt: number): FakeProblem {
-  if (band !== "56") return generateProblem(band, level as MathLevel, dealt);
-  const list = fakeProblemsFor(band, level);
-  return list[dealt % list.length]!;
-}
+const deal = (band: GradeBandId, level: 1 | 2 | 3, dealt: number): Problem => generateProblem(band, level, dealt);
 
 export function newPanel(band: GradeBandId, now: number, level: 1 | 2 | 3 = 1): PanelState {
   return {

@@ -2,17 +2,9 @@
 
 import { useRouter } from "next/navigation";
 import { BugTag, broadcastButton } from "@/components/broadcast";
+import { Fraction } from "@/components/fraction";
 import { useStartFlow } from "@/components/start-flow";
 import { GRADE_BANDS, type GradeBand } from "@/lib/grade-bands";
-
-function Fraction({ n, d }: { n: number; d: number }) {
-  return (
-    <span className="mx-[0.08em] inline-grid text-center align-middle text-[0.66em] leading-none">
-      <span className="border-b-[0.09em] border-current px-[0.12em] pb-[0.07em]">{n}</span>
-      <span className="px-[0.12em] pt-[0.07em]">{d}</span>
-    </span>
-  );
-}
 
 function Example({ band }: { band: GradeBand }) {
   const ex = band.example;
@@ -23,8 +15,8 @@ function Example({ band }: { band: GradeBand }) {
           ex.text
         ) : (
           <>
-            <Fraction n={ex.fractions[0][0]} d={ex.fractions[0][1]} /> {ex.op}{" "}
-            <Fraction n={ex.fractions[1][0]} d={ex.fractions[1][1]} />
+            <Fraction n={ex.fractions[0][0]} d={ex.fractions[0][1]} className="text-[0.66em]" /> {ex.op}{" "}
+            <Fraction n={ex.fractions[1][0]} d={ex.fractions[1][1]} className="text-[0.66em]" />
           </>
         )}
       </span>

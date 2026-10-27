@@ -1,7 +1,9 @@
 "use client";
 
-import { spoken, type MathText as MathTextValue } from "@/lib/stage/fake-problems";
+import type { MathText as MathTextValue } from "@ktd/core";
+import { Fraction } from "@/components/fraction";
 import type { Header, PanelState } from "@/lib/stage/math-panel";
+import { spoken } from "@/lib/stage/spoken";
 
 const HEADER_TONE: Record<Header["tone"], string> = {
   plain: "bg-white text-navy",
@@ -17,14 +19,7 @@ const OPT_LABEL = "absolute top-[3px] left-3 bg-navy px-1.5 font-sans text-[11px
 export function MathText({ text }: { text: MathTextValue }) {
   return text.map((t, i) => {
     if (typeof t === "string") return <span key={i}>{t}</span>;
-    if ("fr" in t) {
-      return (
-        <span key={i} className="fr">
-          <span>{t.fr[0]}</span>
-          <span>{t.fr[1]}</span>
-        </span>
-      );
-    }
+    if ("fr" in t) return <Fraction key={i} n={t.fr[0]} d={t.fr[1]} w={t.w} />;
     if ("small" in t) {
       return (
         <small key={i} className="font-sans text-xs font-black text-[#4a5a80]">

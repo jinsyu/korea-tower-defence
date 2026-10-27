@@ -40,6 +40,33 @@ export const MATH_LEVELS: readonly LevelRow[] = [
     ],
     content: "(세 자리 수)×(두 자리 수), (두·세 자리 수)÷(두 자리 수)",
   },
+  {
+    band: "56",
+    level: 1,
+    types: [
+      { name: "분수 덧셈", standards: ["[6수01-08]"] },
+      { name: "분수 뺄셈", standards: ["[6수01-08]"] },
+    ],
+    content: "분모가 다른 분수의 덧셈·뺄셈(진분수·대분수, 분모 2~12)",
+  },
+  {
+    band: "56",
+    level: 2,
+    types: [
+      { name: "분수 곱셈", standards: ["[6수01-09]"] },
+      { name: "소수 곱셈", standards: ["[6수01-13]"] },
+    ],
+    content: "(분수)×(자연수·분수), (소수)×(자연수·소수)",
+  },
+  {
+    band: "56",
+    level: 3,
+    types: [
+      { name: "분수 나눗셈", standards: ["[6수01-10]", "[6수01-11]"] },
+      { name: "소수 나눗셈", standards: ["[6수01-14]", "[6수01-15]"] },
+    ],
+    content: "(자연수)÷(자연수)의 몫을 분수·소수로, (분수)÷(자연수·분수), (소수)÷(자연수·소수), 나누어떨어지는 것만",
+  },
 ];
 
 export function problemType(band: MathBand, level: MathLevel, name: string): ProblemType {

@@ -173,7 +173,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T5: 첫 진입 화면 2 — 복구 코드, 이어 하기, 정보 화면 — DoD: D1(화면 흐름), D68(화면 부분), D73(문구)
 
-- [ ] T5
+- [x] T5
 - 기준 시안: `option-b.html?screen=code`, `?screen=restore`(데모 `restore-ok`, `restore-bad`, `restore-lock`)
 
 - 화면

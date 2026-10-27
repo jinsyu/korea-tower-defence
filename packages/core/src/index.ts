@@ -2,3 +2,4 @@
 export * from "./geo/topo";
 export * from "./looks";
 export * from "./balloons";
+export * from "./names";

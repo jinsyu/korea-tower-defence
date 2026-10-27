@@ -43,9 +43,9 @@ describe("buildRobots", () => {
 });
 
 describe("buildSitemap", () => {
-  it("lists the home page with an absolute URL", () => {
+  it("lists the public pages with absolute URLs", () => {
     const entries = buildSitemap("https://a.test");
-    expect(entries.map((e) => e.url)).toEqual(["https://a.test/"]);
+    expect(entries.map((e) => e.url)).toEqual(["https://a.test/", "https://a.test/info"]);
   });
 });
 

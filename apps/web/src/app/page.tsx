@@ -6,7 +6,6 @@ import { SITE_DESCRIPTION, pageMetadata } from "@/lib/site";
 
 export const metadata = pageMetadata({ description: SITE_DESCRIPTION, path: "/" });
 
-// "복구 코드로 이어 하기" gets wired up in T5 (restore screen).
 export default function Home() {
   return (
     <main className="grid flex-1 place-items-center bg-[radial-gradient(ellipse_at_70%_40%,rgb(27_63_134/0.6),transparent_60%)] px-3.5 py-5 short-phone:py-3">
@@ -25,11 +24,16 @@ export default function Home() {
           <Link href="/start/grade" className={`${broadcastButton} bg-yellow`}>
             처음 하기
           </Link>
-          <button type="button" className={`${broadcastButton} bg-white`}>
+          <Link href="/restore" className={`${broadcastButton} bg-white`}>
             복구 코드로 이어 하기
-          </button>
+          </Link>
         </div>
-        <p className="text-[13px] font-bold text-mut">가입도, 이름도 없어요. 별명은 목록에서 골라요.</p>
+        <p className="text-[13px] font-bold text-mut">
+          가입도, 이름도 없어요. 별명은 목록에서 골라요.{" "}
+          <Link href="/info" className="inline-flex min-h-11 min-w-11 items-center justify-center px-2 align-middle text-white underline underline-offset-2">
+            정보
+          </Link>
+        </p>
       </div>
     </main>
   );

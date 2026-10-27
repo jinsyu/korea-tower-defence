@@ -31,7 +31,7 @@ export function buildRobots(baseUrl: string): MetadataRoute.Robots {
   };
 }
 
-const PUBLIC_PATHS = ["/"] as const;
+const PUBLIC_PATHS = ["/", "/info"] as const;
 
 export function buildSitemap(baseUrl: string): MetadataRoute.Sitemap {
   return PUBLIC_PATHS.map((path) => ({ url: `${baseUrl}${path}` }));

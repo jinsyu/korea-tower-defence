@@ -6,7 +6,8 @@ export type Db = Database.Database;
 
 // spec "서버 DB". No IP, user agent, device or minute-level visit columns (D69): the last visit is a day only.
 // Keys and recovery codes are stored as hashes only (D4). Big game numbers (power) are decimal TEXT (BigInt).
-// recent_answers, open_problems and region_daily come with the problems and the national board (T12, T17).
+// open_problems keeps the answer on the server only (D33); recent_answers keeps the last 50 per guardian (trimmed on
+// insert). region_daily comes with the national board (T17).
 export const SCHEMA = `
 CREATE TABLE IF NOT EXISTS guardians (
   id TEXT PRIMARY KEY,
@@ -57,6 +58,23 @@ CREATE TABLE IF NOT EXISTS region_power_log (
   power TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS region_power_log_at ON region_power_log(at);
+CREATE TABLE IF NOT EXISTS open_problems (
+  guardian_id TEXT PRIMARY KEY REFERENCES guardians(id) ON DELETE CASCADE,
+  id TEXT NOT NULL UNIQUE,
+  seed INTEGER NOT NULL,
+  band TEXT NOT NULL,
+  level INTEGER NOT NULL,
+  answer INTEGER NOT NULL,
+  sent_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS recent_answers (
+  guardian_id TEXT NOT NULL REFERENCES guardians(id) ON DELETE CASCADE,
+  key TEXT NOT NULL,
+  outcome TEXT NOT NULL CHECK (outcome IN ('right', 'wrong', 'skip')),
+  ms INTEGER NOT NULL,
+  at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS recent_answers_guardian ON recent_answers(guardian_id, at);
 `;
 
 export function openDb(path: string): Db {

@@ -51,7 +51,7 @@ export const isTowerType = (v: unknown): v is TowerType => TOWER_TYPES.includes(
 /** Device keys are 256-bit random values, so a plain SHA-256 is enough to keep only a hash (D4). */
 export const hashKey = (key: string): string => createHash("sha256").update(key).digest("base64url");
 
-type GuardianRow = {
+export type GuardianRow = {
   id: string;
   nick_adj: number;
   nick_noun: number;
@@ -89,7 +89,7 @@ export type MeView = {
   stats: Record<string, string>;
 };
 
-const powerOf = (g: GuardianRow): bigint =>
+export const powerOf = (g: GuardianRow): bigint =>
   towerPower({ stage: BigInt(g.stage), level: BigInt(g.level), tendency: g.tendency, towerType: g.tower_type });
 
 export function meView(g: GuardianRow, now: number): MeView {

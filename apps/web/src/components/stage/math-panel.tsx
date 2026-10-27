@@ -2,7 +2,7 @@
 
 import type { MathText as MathTextValue } from "@ktd/core";
 import { Fraction } from "@/components/fraction";
-import type { Header, PanelState } from "@/lib/stage/math-panel";
+import type { Header, PanelView } from "@/lib/stage/math-panel";
 import { spoken } from "@/lib/stage/spoken";
 
 const HEADER_TONE: Record<Header["tone"], string> = {
@@ -36,8 +36,9 @@ export function MathText({ text }: { text: MathTextValue }) {
 }
 
 type Props = {
-  state: PanelState;
+  state: PanelView;
   header: Header;
+  /** Connection lost, or no problem to answer yet (loading, waiting after many skips): choices are locked. */
   offline: boolean;
   onPick: (index: number) => void;
   onNext: () => void;
@@ -55,7 +56,7 @@ export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
   const live = answered
     ? answered.correct
       ? `정답! ${answered.points}포인트${answered.note ? `. ${answered.note}` : ""}`
-      : `내가 고른 답은 ${spoken(p.choices[answered.pick]!)}, 정답은 ${spoken(p.choices[p.answer]!)}예요.`
+      : `내가 고른 답은 ${spoken(p.choices[answered.pick]!)}, 정답은 ${spoken(p.choices[answered.answer]!)}예요.`
     : "";
 
   return (
@@ -63,6 +64,7 @@ export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
       data-slot="math"
       aria-label="수학 문제"
       data-fractions={hasFraction || undefined}
+      data-problem={state.id}
       className="mq relative grid min-w-0 gap-1 border-t-4 border-yellow bg-navy pb-1.5"
     >
       <div className="flex h-11 min-w-0 items-stretch">
@@ -103,7 +105,7 @@ export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
         <div className="grid grid-cols-2 grid-rows-[repeat(2,var(--oh))] gap-1.5">
           {p.choices.map((c, i) => {
             const picked = answered?.pick === i;
-            const isAnswer = i === p.answer;
+            const isAnswer = i === answered?.answer;
             if (wrong && !picked && !isAnswer) return null;
             // Labelled choices move down under the label; a tall fraction moves right of it instead.
             const labelRoom = c.some((t) => typeof t === "object" && "fr" in t) ? "justify-end" : "pt-4";
@@ -132,16 +134,16 @@ export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
               </button>
             );
           })}
-          {wrong && (
+          {wrong && answered && (
             <div
               data-slot="math-solution"
               className="order-1 col-span-2 flex min-h-0 animate-lower-in overflow-y-auto border-l-4 border-cyan bg-black px-2.5 py-1"
             >
               {/* my-auto centres the solution when it fits and lets it scroll from the top when it does not. */}
               <p className="mq-sol my-auto text-[13px] leading-[1.45] break-keep text-[#dfe7ff] wide-or-landscape:text-sm">
-                <MathText text={p.solution.text} />
+                <MathText text={answered.solution.text} />
                 <b className="text-white">
-                  <MathText text={p.solution.result} />
+                  <MathText text={answered.solution.result} />
                 </b>
               </p>
             </div>

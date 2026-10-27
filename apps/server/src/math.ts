@@ -1,0 +1,231 @@
+// Problems and grading on the server (spec "문제 흐름과 포인트", "찍기·매크로·반복 막기", "자동 성장").
+// One open problem per guardian; the screen gets the expression and four choices only, the answer after grading.
+// Every function runs synchronously inside one batched-write transaction, so two answers to the same problem are
+// handled one after the other and only the first finds it open (D32, D54).
+import {
+  addPoints,
+  answerPoints,
+  dailyRatePercent,
+  FULL_POINTS_UNTIL,
+  generateProblem,
+  type MathBand,
+  type MathLevel,
+  type MathText,
+} from "@ktd/core";
+import { randomBytes, randomInt } from "node:crypto";
+import type { Db } from "./db";
+import { kstDate } from "./dates";
+import { meView, powerOf, type GuardianRow, type MeView } from "./guardians";
+import {
+  countedToday,
+  GUESS_PAUSE_MS,
+  isTooFast,
+  looksLikeGuessing,
+  moveStep,
+  nextProblemAt,
+  overMinuteLimit,
+  RECENT_KEPT,
+  type Outcome,
+  type Recent,
+} from "./math-rules";
+import type { Regions } from "./regions";
+
+/**
+ * Seeds tried for an expression not among the recent ones. A level with fewer expressions than that (1~2학년 1·2단계:
+ * 36) never finds one, so the tries must cover the whole level: then the pick is the expression seen longest ago and
+ * a level of n expressions repeats every n problems, i.e. never within the last min(50, n − 1) (spec 결정 사항).
+ * 500 random tries miss one of 36 expressions with a chance of about 3 in 100,000.
+ */
+const FRESH_TRIES = 500;
+
+type OpenRow = { guardian_id: string; id: string; seed: number; band: MathBand; level: MathLevel; answer: number; sent_at: number };
+type RecentRow = Recent & { key: string };
+
+type MathRow = GuardianRow & {
+  math_step: MathLevel;
+  right_streak: number;
+  wrong_streak: number;
+  today_on: string | null;
+  today_correct: number;
+  points_paused_until: number;
+};
+
+/** What the screen sees of a problem: no answer, no values, no solution, no seed (D33). */
+export type ShownProblem = { id: string; band: MathBand; type: string; expr: MathText; choices: MathText[] };
+
+/** Header state the screen needs after a reload too. */
+export type MathStatus = { pauseLeftMs: number; dailyRate: number };
+
+export type ProblemReply = ({ problem: ShownProblem; waitMs: 0 } | { problem: null; waitMs: number }) & MathStatus;
+
+export type AnswerReply = {
+  correct: boolean;
+  /** Revealed only now, with the solution. */
+  answer: number;
+  solution: { text: MathText; result: MathText };
+  points: number;
+  fast: boolean;
+  limited: boolean;
+  /** 151st point-earning answer today: "쉬어 가도 괜찮아요", once a day. */
+  restHint: boolean;
+  step: "up" | "down" | null;
+  me: MeView;
+} & MathStatus;
+
+export type Refused = { error: "no_problem" | "no_guardian" };
+
+export type MathService = ReturnType<typeof createMath>;
+
+export function createMath(db: Db, regions: Regions) {
+  const q = {
+    guardian: db.prepare<[string], MathRow>("SELECT * FROM guardians WHERE id = ?"),
+    open: db.prepare<[string], OpenRow>("SELECT * FROM open_problems WHERE guardian_id = ?"),
+    insertOpen: db.prepare(
+      "INSERT INTO open_problems (guardian_id, id, seed, band, level, answer, sent_at) VALUES (@guardian_id, @id, @seed, @band, @level, @answer, @sent_at)",
+    ),
+    closeOpen: db.prepare("DELETE FROM open_problems WHERE guardian_id = ?"),
+    recent: db.prepare<[string], RecentRow>("SELECT key, outcome, ms, at FROM recent_answers WHERE guardian_id = ? ORDER BY at, rowid"),
+    insertRecent: db.prepare("INSERT INTO recent_answers (guardian_id, key, outcome, ms, at) VALUES (?, ?, ?, ?, ?)"),
+    trimRecent: db.prepare(
+      `DELETE FROM recent_answers WHERE guardian_id = @g AND rowid NOT IN
+         (SELECT rowid FROM recent_answers WHERE guardian_id = @g ORDER BY at DESC, rowid DESC LIMIT ${RECENT_KEPT})`,
+    ),
+    saveAnswer: db.prepare(
+      `UPDATE guardians SET math_step = @math_step, right_streak = @right_streak, wrong_streak = @wrong_streak,
+         today_on = @today_on, today_correct = @today_correct, points_paused_until = @points_paused_until,
+         total_points = @total_points, wallet = @wallet, level = @level, stage = @stage WHERE id = @id`,
+    ),
+  };
+
+  const status = (g: MathRow, now: number): MathStatus => ({
+    pauseLeftMs: Math.max(0, g.points_paused_until - now),
+    dailyRate: Number(dailyRatePercent(BigInt(countedToday(g.today_on, g.today_correct, now) + 1))),
+  });
+
+  const show = (row: OpenRow): ShownProblem => {
+    const p = generateProblem(row.band, row.level, row.seed);
+    return { id: row.id, band: row.band, type: p.type, expr: p.expr, choices: p.choices };
+  };
+
+  function remember(guardianId: string, key: string, outcome: Outcome, ms: number, at: number) {
+    q.insertRecent.run(guardianId, key, outcome, ms, at);
+    q.trimRecent.run({ g: guardianId });
+  }
+
+  /** A seed whose expression is not among the recent ones; small levels (36 expressions) take the one seen longest ago. */
+  function freshSeed(band: MathBand, level: MathLevel, recent: readonly RecentRow[]): { seed: number; answer: number } {
+    const lastSeen = new Map<string, number>();
+    recent.forEach((r, i) => lastSeen.set(r.key, i));
+    let best: { seed: number; answer: number; seen: number } | undefined;
+    for (let i = 0; i < FRESH_TRIES; i++) {
+      const seed = randomInt(0, 2 ** 31);
+      const p = generateProblem(band, level, seed);
+      const seen = lastSeen.get(p.key) ?? -1;
+      if (seen === -1) return { seed, answer: p.answer };
+      if (!best || seen < best.seen) best = { seed, answer: p.answer, seen };
+    }
+    return best!;
+  }
+
+  /** The open problem, made now when there is none. Reloading gets the same one (D32). */
+  function problem(guardianId: string, now: number): ProblemReply | Refused {
+    const g = q.guardian.get(guardianId);
+    if (!g) return { error: "no_guardian" };
+    const open = q.open.get(guardianId);
+    if (open) return { problem: show(open), waitMs: 0, ...status(g, now) };
+    const recent = q.recent.all(guardianId);
+    const waitMs = nextProblemAt(recent) - now;
+    if (waitMs > 0) return { problem: null, waitMs, ...status(g, now) };
+    const { seed, answer } = freshSeed(g.band, g.math_step, recent);
+    const row: OpenRow = { guardian_id: guardianId, id: randomBytes(12).toString("base64url"), seed, band: g.band, level: g.math_step, answer, sent_at: now };
+    q.insertOpen.run(row);
+    return { problem: show(row), waitMs: 0, ...status(g, now) };
+  }
+
+  const openFor = (guardianId: string, problemId: string): OpenRow | undefined => {
+    const open = q.open.get(guardianId);
+    return open && open.id === problemId ? open : undefined;
+  };
+
+  /** Grade an answer. Only the open problem of this guardian, once; everything else comes from the server's own rows (D54). */
+  function answer(guardianId: string, problemId: string, pick: number, at: number): AnswerReply | Refused {
+    const g = q.guardian.get(guardianId);
+    if (!g) return { error: "no_guardian" };
+    const open = openFor(guardianId, problemId);
+    if (!open) return { error: "no_problem" };
+    q.closeOpen.run(guardianId);
+
+    const p = generateProblem(open.band, open.level, open.seed);
+    const correct = pick === open.answer;
+    const ms = at - open.sent_at;
+    const fast = isTooFast(open.sent_at, at);
+    const earlier = q.recent.all(guardianId);
+    const limited = overMinuteLimit(earlier, at);
+    remember(guardianId, p.key, correct ? "right" : "wrong", ms, at);
+
+    // Guess suspicion looks at answers since the last pause ended, this one included (D39).
+    let pausedUntil = g.points_paused_until;
+    if (at >= pausedUntil) {
+      const since = q.recent.all(guardianId).filter((r) => r.outcome !== "skip" && r.at >= pausedUntil);
+      if (looksLikeGuessing(since)) pausedUntil = at + GUESS_PAUSE_MS;
+    }
+    const paused = at < pausedUntil;
+
+    // Skips and too-fast answers leave the streaks alone (D35, D37).
+    const streaks = fast
+      ? { step: g.math_step, right: g.right_streak, wrong: g.wrong_streak, moved: null }
+      : moveStep({ step: g.math_step, right: g.right_streak, wrong: g.wrong_streak }, correct);
+
+    const today = countedToday(g.today_on, g.today_correct, at);
+    const earns = correct && !fast && !limited && !paused;
+    const nth = earns ? today + 1 : today;
+    const points = earns ? answerPoints(open.level, BigInt(nth)) : BigInt(0);
+
+    const before = { total: BigInt(g.total_points), wallet: BigInt(g.wallet), level: BigInt(g.level), stage: BigInt(g.stage) };
+    const after = addPoints(before, points);
+    q.saveAnswer.run({
+      id: guardianId,
+      math_step: streaks.step,
+      right_streak: streaks.right,
+      wrong_streak: streaks.wrong,
+      today_on: kstDate(at),
+      today_correct: nth,
+      points_paused_until: pausedUntil,
+      total_points: Number(after.total),
+      wallet: Number(after.wallet),
+      level: Number(after.level),
+      stage: Number(after.stage),
+    });
+    const saved = q.guardian.get(guardianId)!;
+    // My tower's power joins the region from the next wave (spec "화면 연출과 서버 결과 맞추기").
+    const delta = powerOf(saved) - powerOf(g);
+    if (delta !== BigInt(0)) regions.shiftPower(g.region, delta, 0, at);
+
+    return {
+      correct,
+      answer: open.answer,
+      solution: p.solution,
+      points: Number(points),
+      fast,
+      limited,
+      restHint: earns && nth === Number(FULL_POINTS_UNTIL) + 1,
+      step: streaks.moved,
+      me: meView(saved, at),
+      ...status(saved, at),
+    };
+  }
+
+  /** Skip: no points, streaks unchanged; many skips make the next problem wait (D40). */
+  function skip(guardianId: string, problemId: string, at: number): { waitMs: number } | Refused {
+    const open = openFor(guardianId, problemId);
+    if (!open) return { error: "no_problem" };
+    q.closeOpen.run(guardianId);
+    remember(guardianId, generateProblem(open.band, open.level, open.seed).key, "skip", at - open.sent_at, at);
+    return { waitMs: Math.max(0, nextProblemAt(q.recent.all(guardianId)) - at) };
+  }
+
+  /** A band change starts the new band's first level with a new problem (D26). */
+  const dropOpen = (guardianId: string) => void q.closeOpen.run(guardianId);
+
+  return { problem, answer, skip, dropOpen };
+}

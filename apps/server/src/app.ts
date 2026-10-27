@@ -6,6 +6,7 @@ import { HOUR_MS, kstDate } from "./dates";
 import { createWriter, openDb, type Db } from "./db";
 import { createGuardians, isBand, isNick, isTowerType, meView, nickCandidates } from "./guardians";
 import { createAddressLimits } from "./limits";
+import { createMath } from "./math";
 import { createRegions, REGION_CODES } from "./regions";
 
 export type GameServer = {
@@ -68,6 +69,7 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
   const writer = createWriter(db, config.flushMs);
   const regions = createRegions(db);
   const guardians = createGuardians(db, regions, config.serverSecret);
+  const math = createMath(db, regions);
   const limits = createAddressLimits(config.ipHmacKey, now);
 
   const authed = (req: IncomingMessage): Guardian | undefined => {
@@ -127,7 +129,11 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
     },
     "POST /me/band": async (g, { band }) => {
       if (!isBand(band)) return bad;
-      return { status: 200, body: me(await writer.run(() => guardians.setBand(g.id, band))) };
+      const changed = await writer.run(() => {
+        math.dropOpen(g.id);
+        return guardians.setBand(g.id, band);
+      });
+      return { status: 200, body: me(changed) };
     },
     "POST /me/nick": async (g, { nick }) => {
       if (!isNick(nick)) return bad;
@@ -142,12 +148,32 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
       return { status: 200, body: me(out.guardian) };
     },
     "POST /me/code": async (g) => ({ status: 200, body: { code: await writer.run(() => guardians.newCode(g.id)) } }),
+    // The open problem, made when there is none (D32). The answer stays on the server (D33).
+    "GET /math/problem": async (g) => refusedOr(await writer.run(() => math.problem(g.id, now()))),
+    // Only the problem id and the pick are read; points, level, time or "correct" sent by a screen are ignored (D54).
+    // The time is taken when the request arrives, before it waits for the batched write.
+    "POST /math/answer": async (g, { id, pick }) => {
+      if (typeof id !== "string" || !Number.isInteger(pick) || (pick as number) < 0 || (pick as number) > 3) return bad;
+      const at = now();
+      return refusedOr(await writer.run(() => math.answer(g.id, id, pick as number, at)));
+    },
+    "POST /math/skip": async (g, { id }) => {
+      if (typeof id !== "string") return bad;
+      const at = now();
+      return refusedOr(await writer.run(() => math.skip(g.id, id, at)));
+    },
     "DELETE /me": async (g) => {
       await writer.run(() => guardians.remove(g.id, now()));
       io.in(`g:${g.id}`).disconnectSockets(true);
       return { status: 204 };
     },
   };
+
+  /** A guardian deleted while the request waited answers like an unknown key; a closed or foreign problem is a conflict. */
+  function refusedOr(out: object): Reply {
+    if ("error" in out) return out.error === "no_guardian" ? { status: 401, body: out } : { status: 409, body: out };
+    return { status: 200, body: out };
+  }
 
   const corsHeaders = {
     "access-control-allow-origin": config.allowedOrigin,

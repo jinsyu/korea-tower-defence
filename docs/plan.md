@@ -378,7 +378,7 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
 
 ### T12: 게임 서버 2 — 문제 내기·채점, 포인트, 찍기 막기, 자동 업그레이드 [E2E] — DoD: D20, D32, D33, D34, D35, D36, D37, D38, D39, D40, D48, D54
 
-- [ ] T12
+- [x] T12
 
 - 서버
   - 열린 문제 하나, 최근 50문제 중복 막기
@@ -396,9 +396,13 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
     - D34·D48 포인트와 업그레이드 띠
 - 검증 명령
   ```sh
-  pnpm test --filter server --filter core
-  uptime && pnpm --filter web test:e2e -- tests/e2e/math.spec.ts   # 시험용 서버·웹을 띄우고 끝나면 끔
+  pnpm test --project server --project core --project web && pnpm typecheck && pnpm lint
+  uptime && pnpm --filter web test:e2e tests/e2e/math.spec.ts
+  pnpm --filter web build
   ```
+  - 루트 `pnpm test`는 `vitest run`이라 `--filter` 대신 `--project`를 쓴다.
+  - e2e는 시험용 게임 서버(127.0.0.1:4150, 임시 DB)와 웹(localhost:3150, 시험 서버 주소로 다시 빌드한 `next start`)을 직접 띄우고, 끝나면 Playwright가 끈다. 임시 DB 폴더는 globalTeardown이 지운다.
+  - e2e가 `.next`를 시험 서버 주소로 빌드하므로 마지막에 web build를 다시 한다.
 - 완료 기준: 위 DoD
 
 ### T13: 게임 서버 3 — 지역 정산, 화력 모으기, 대표 뽑기, 지역 방송, 지난 소식, 연결 순서 [E2E] — DoD: D21, D22, D23, D24, D57, D58, D77

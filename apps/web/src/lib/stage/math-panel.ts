@@ -1,5 +1,6 @@
-// Problem panel state on the screen (dealt and marked here until the server takes over, T12).
-// Rules shown here follow spec "문제 흐름과 포인트", "난이도 이동" and "찍기·매크로·반복 막기".
+// Problem panel state on the screen. With a guardian the server deals and marks the problems (T12, server-math.ts);
+// the dev-only `?demo=` screens still deal and mark here with the same rules (spec "문제 흐름과 포인트", "난이도 이동",
+// "찍기·매크로·반복 막기").
 import { generateProblem, type Problem } from "@ktd/core";
 import { GRADE_BANDS, type GradeBandId } from "@/lib/grade-bands";
 
@@ -7,8 +8,8 @@ import { GRADE_BANDS, type GradeBandId } from "@/lib/grade-bands";
 export const LEVEL_POINTS = [10, 12, 15] as const;
 /** An answer within this time after the problem appeared earns no points and does not count toward streaks. */
 export const TOO_FAST_MS = 1000;
-/** Correct answer: the next problem comes after this. */
-export const NEXT_AFTER_MS = 900;
+/** Correct answer: the next problem comes after this (spec 0.8 s, D32). */
+export const NEXT_AFTER_MS = 800;
 export const NEXT_AFTER_LEVEL_UP_MS = 1700;
 export const REDUCED_NEXT_AFTER_MS = 600;
 
@@ -18,6 +19,29 @@ export type Answered = {
   points: number;
   /** Shown next to the points ("천천히 풀어도 괜찮아요"). */
   note: string | null;
+  /** The right choice and the solution arrive only with the marking (D33). */
+  answer: number;
+  solution: Problem["solution"];
+};
+
+/** What the panel shows of a problem before it is answered: no answer, no solution. */
+export type ShownProblem = Pick<Problem, "type" | "expr" | "choices">;
+
+/** Everything the problem panel and its header draw. */
+export type PanelView = {
+  band: GradeBandId;
+  problem: ShownProblem;
+  answered: Answered | null;
+  /** Guess suspicion: points paused until this time (Date.now()). */
+  pausedUntil: number;
+  /** Many correct answers today: points cut down, header says so. */
+  daily: boolean;
+  /** Percent paid now when `daily` (50 or 10); 50 when not given. */
+  dailyRate?: number;
+  /** Many skips: the next problem comes at this time (Date.now()). */
+  waitUntil?: number;
+  /** Server problem id, kept on the panel for tests and screen checks. */
+  id?: string;
 };
 
 export type PanelState = {
@@ -100,7 +124,7 @@ export function answerProblem(s: PanelState, pick: number, now: number, reduced 
     else if (s.pausedUntil > now) note = "포인트 멈춤 중";
     else points = s.daily ? Math.round(LEVEL_POINTS[s.level - 1]! / 2) : LEVEL_POINTS[s.level - 1]!;
   }
-  const answered: Answered = { pick, correct, points, note };
+  const answered: Answered = { pick, correct, points, note, answer: p.answer, solution: p.solution };
   let { level, streak, wrongStreak } = s;
   let levelUp = false;
   let levelDown = false;
@@ -133,13 +157,15 @@ export type Header = { text: string; tone: "plain" | "warn" | "info" };
  * Header line: "학년군 · 유형" (D42). Guess pause and the daily notice borrow the same line so the panel never grows.
  * The level is never shown.
  */
-export function panelHeader(s: PanelState, now: number): Header {
+export function panelHeader(s: PanelView, now: number): Header {
   const left = s.pausedUntil - now;
   if (left > 0) {
     const sec = Math.ceil(left / 1000);
     return { text: `포인트 멈춤 ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, "0")} · 문제를 천천히 읽어 봐요`, tone: "warn" };
   }
-  if (s.daily) return { text: "쉬어 가도 괜찮아요 · 지금은 포인트 절반", tone: "info" };
+  const wait = (s.waitUntil ?? 0) - now;
+  if (wait > 0) return { text: `잠깐 쉬었다 해요 · ${Math.ceil(wait / 1000)}초 뒤에 다음 문제`, tone: "info" };
+  if (s.daily) return { text: `쉬어 가도 괜찮아요 · 지금은 포인트 ${s.dailyRate === 10 ? "10분의 1" : "절반"}`, tone: "info" };
   return { text: `${bandLabel(s.band)} · ${s.problem.type}`, tone: "plain" };
 }
 

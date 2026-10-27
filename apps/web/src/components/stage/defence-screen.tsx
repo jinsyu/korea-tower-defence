@@ -1,8 +1,11 @@
 "use client";
 
 import { formatBig, parseStageFile, type StageFile } from "@ktd/core";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { broadcastButton } from "@/components/broadcast";
+import { isDevDemo } from "@/components/use-my-guardian";
+import { OFFLINE_TEXT } from "@/lib/game-server";
 import { FAKE_REGION, fakeGuardians, type RegionHud } from "@/lib/stage/fake-region";
 import {
   advanceDelay,
@@ -13,8 +16,10 @@ import {
   panelHeader,
   resumeAfterReconnect,
   type PanelState,
+  type PanelView,
 } from "@/lib/stage/math-panel";
-import { boardTowerInputs, gainPoints, levelUpText, meBarView, meStore, repRows, upgradeChange } from "@/lib/stage/me-store";
+import { boardTowerInputs, gainPoints, levelUpText, meBarView, meFromServer, meStore, repRows, upgradeChange } from "@/lib/stage/me-store";
+import { wrongTip, type AnswerReply } from "@/lib/stage/server-math";
 import { regionName } from "@/lib/region-names";
 import { fmt, type StageEvent } from "@/lib/stage/sim";
 import { MathPanel } from "./math-panel";
@@ -23,6 +28,7 @@ import { NewsSheet, type AwayNews } from "./news-sheet";
 import { RepList } from "./rep-list";
 import { StageBoard, type BoardApi } from "./stage-board";
 import { useDevHooks, type ScreenActions } from "./use-dev-hooks";
+import { useServerMath } from "./use-server-math";
 
 /** Test stage until the real 185 stages arrive (T15–T16). */
 const STAGE_URL = "/stages/dev/32540.json";
@@ -74,10 +80,14 @@ const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)"
 
 /**
  * Defence screen: scoreboard, board, problem panel, level bar, representative list and ticker.
- * Region, problems and my guardian are fake until the server sends them (T11–T13).
+ * Problems, points and my tower come from the game server (T12); the region stays fake until T13.
+ * The dev-only `?demo=` screens deal and mark problems here without a server.
  */
 export function DefenceScreen() {
   const { stage, failed, retry } = useStageFile();
+  const router = useRouter();
+  // Fixed for the screen's life: the gate shows this screen only after it knows (client side) which it is.
+  const [demo] = useState(isDevDemo);
   // My region's name; its numbers stay fake until the region server (T13).
   const [region, setRegion] = useState<RegionHud>(() => ({ ...FAKE_REGION, name: regionName(meStore.get().region) }));
   const [tick, setTick] = useState(0);
@@ -118,12 +128,6 @@ export function DefenceScreen() {
     if (!next) setPanel((p) => resumeAfterReconnect(p, Date.now()));
   }, []);
 
-  // The guess-pause header counts down once a second.
-  useEffect(() => {
-    if (panel.pausedUntil <= clock) return;
-    const id = setInterval(() => setClock(Date.now()), 1000);
-    return () => clearInterval(id);
-  }, [panel.pausedUntil, clock]);
 
   const onEvent = useCallback((e: StageEvent) => {
     if (process.env.NODE_ENV !== "production") eventsRef.current.push(e);
@@ -152,6 +156,48 @@ export function DefenceScreen() {
     }
   }, []);
 
+  /** The server marked my answer: the right-answer shot, upgrade and level effects follow its numbers (D48). */
+  const onServerAnswer = useCallback(
+    (reply: AnswerReply) => {
+      const api = apiRef.current;
+      const before = meStore.get();
+      const after = { ...meFromServer(reply.me), pts24: before.pts24 };
+      if (reply.correct) api?.sim.meFire(reply.points);
+      const change = upgradeChange(before.step, after.step);
+      if (change && api) {
+        api.sim.upgrade(change.kind, after.step);
+        api.banner(change.text, change.tone, change.ms);
+      }
+      meStore.set(after);
+      if (after.level > before.level) {
+        setLevelBump((n) => n + 1);
+        api?.tip(levelUpText(after.level, after.stance), 2400);
+      }
+      const reduced = reducedMotion();
+      if (!reply.correct) api?.tip(wrongTip(reply), 2600);
+      else if (reply.step === "up") later(() => apiRef.current?.banner("더 어려운 문제에 도전!", "yellow", 1500), reduced ? 0 : 500);
+      if (reply.restHint) later(() => apiRef.current?.banner("오늘 정말 많이 풀었어요! 쉬어 가도 괜찮아요", "white", 2200), 2000);
+    },
+    [later],
+  );
+  const onUnreachable = useCallback(() => apiRef.current?.tip(OFFLINE_TEXT, 2600), []);
+  const onGone = useCallback(() => router.replace("/"), [router]);
+  const server = useServerMath({ enabled: !demo, band: me.band, offline, onAnswered: onServerAnswer, onUnreachable, onGone });
+  const view: PanelView = demo ? panel : server.view;
+
+  // The guess-pause and skip-wait headers count down once a second.
+  const countdownUntil = Math.max(view.pausedUntil, view.waitUntil ?? 0);
+  useEffect(() => {
+    if (countdownUntil <= clock) return;
+    const tick = () => setClock(Date.now());
+    const first = setTimeout(tick, 0);
+    const id = setInterval(tick, 1000);
+    return () => {
+      clearTimeout(first);
+      clearInterval(id);
+    };
+  }, [countdownUntil, clock]);
+
   const answerWith = useCallback(
     (s: PanelState, pick: number, now: number) => {
       if (offline || s.answered) return;
@@ -169,10 +215,13 @@ export function DefenceScreen() {
     },
     [offline, later, gain],
   );
-  const onPick = (i: number) => answerWith(panel, i, Date.now());
+  const onPick = (i: number) => (demo ? answerWith(panel, i, Date.now()) : void server.pick(i));
   const onNext = () => {
-    if (!offline) setPanel((p) => nextProblem(p, Date.now()));
+    if (!demo) void server.next();
+    else if (!offline) setPanel((p) => nextProblem(p, Date.now()));
   };
+  // Server problems lock their choices while loading, marking, skipping or waiting.
+  const locked = !demo && view.answered === null && view.id === undefined;
 
   const actionsRef = useRef<ScreenActions>(null!);
   useEffect(() => {
@@ -247,7 +296,7 @@ export function DefenceScreen() {
         data-slot="side"
         className="grid min-w-0 content-start gap-1 [grid-area:side] wide-or-landscape:min-h-0 wide-or-landscape:overflow-y-auto"
       >
-        <MathPanel state={panel} header={panelHeader(panel, clock)} offline={offline} onPick={onPick} onNext={onNext} />
+        <MathPanel state={view} header={panelHeader(view, clock)} offline={offline || locked} onPick={onPick} onNext={onNext} />
         <MeBar view={meBarView(me)} bump={levelBump} />
         <RepList rows={reps} />
       </div>

@@ -77,8 +77,8 @@ export function createRegions(db: Db) {
     return { ...rec, ...settle(rec, BigInt(now)) };
   }
 
-  /** A guardian's power joins (+) or leaves (−) the region from the next wave; the guardian count follows. */
-  function shiftPower(code: string, delta: bigint, guardians: 1 | -1, now: number): RegionRecord {
+  /** A guardian's power joins (+), leaves (−) or grows (0) in the region from the next wave; the guardian count follows. */
+  function shiftPower(code: string, delta: bigint, guardians: 1 | 0 | -1, now: number): RegionRecord {
     const before = settled(code, now);
     const next: RegionRecord = {
       ...before,

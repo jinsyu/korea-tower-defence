@@ -13,11 +13,12 @@ export type MyGuardian =
   /** Development only: `?demo=` mockup demos run on the fake guardian without a game server. */
   | { status: "demo" };
 
-const devDemo = () => process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).has("demo");
+/** Development only: `?demo=` screens run without a game server. */
+export const isDevDemo = () => process.env.NODE_ENV !== "production" && new URLSearchParams(window.location.search).has("demo");
 
 /** Asks the server who this device's key belongs to. An unknown key is dropped quietly (D6). */
 async function fetchMyGuardian(): Promise<MyGuardian> {
-  if (devDemo()) return { status: "demo" };
+  if (isDevDemo()) return { status: "demo" };
   const res = await callAsGuardian<{ me: ServerMe }>("/me");
   if (res.ok) {
     meStore.set(meFromServer(res.data.me));

@@ -3,6 +3,7 @@
 import { readFileSync } from "node:fs";
 import {
   estimateLabelSize,
+  generateProblem,
   fitBoard,
   fixedRects,
   isWide,
@@ -17,7 +18,7 @@ import {
 } from "@ktd/core";
 import { describe, expect, it } from "vitest";
 import { GRADE_BANDS } from "@/lib/grade-bands";
-import { FAKE_PROBLEMS, spoken } from "./fake-problems";
+import { FAKE_PROBLEMS, spoken, type FakeProblem } from "./fake-problems";
 import { FAKE_ME, fakeGuardians } from "./fake-region";
 import {
   advanceDelay,
@@ -120,11 +121,19 @@ const headerWidth = (text: string) => [...text].reduce((w, c) => w + (/[가-힣]
 /** 360px: 344px row − "문제" tag 50px − skip button 88px − text padding 20px. */
 const HEADER_ROOM_360 = 344 - 50 - 88 - 20;
 
+/** Generated 1~2·3~4학년 problems (every level, many seeds) and the fake 5~6학년 list. */
+const SAMPLE_PROBLEMS: FakeProblem[] = [
+  ...(["12", "34"] as const).flatMap((band) =>
+    ([1, 2, 3] as const).flatMap((level) => Array.from({ length: 200 }, (_, seed) => generateProblem(band, level, seed))),
+  ),
+  ...FAKE_PROBLEMS,
+];
+
 describe("header line (D42)", () => {
-  const panelFor = (p: (typeof FAKE_PROBLEMS)[number]): PanelState => ({ ...newPanel(p.band, 0, p.level), problem: p });
+  const panelFor = (p: FakeProblem): PanelState => ({ ...newPanel(p.band, 0, p.level), problem: p });
 
   it("is \"학년군 · 유형\" for every problem, with no level number or level word", () => {
-    for (const p of FAKE_PROBLEMS) {
+    for (const p of SAMPLE_PROBLEMS) {
       const h = panelHeader(panelFor(p), 0);
       const band = GRADE_BANDS.find((b) => b.id === p.band)!.label;
       expect(h.text).toBe(`${band} · ${p.type}`);
@@ -134,7 +143,7 @@ describe("header line (D42)", () => {
 
   it("reads the same at every level of a type", () => {
     const byType = new Map<string, Set<string>>();
-    for (const p of FAKE_PROBLEMS) {
+    for (const p of SAMPLE_PROBLEMS) {
       const key = `${p.band}|${p.type}`;
       byType.set(key, (byType.get(key) ?? new Set()).add(panelHeader(panelFor(p), 0).text));
     }
@@ -142,7 +151,7 @@ describe("header line (D42)", () => {
   });
 
   it("fits one line at 360px without an ellipsis", () => {
-    for (const p of FAKE_PROBLEMS) expect(headerWidth(panelHeader(panelFor(p), 0).text)).toBeLessThanOrEqual(HEADER_ROOM_360);
+    for (const p of SAMPLE_PROBLEMS) expect(headerWidth(panelHeader(panelFor(p), 0).text)).toBeLessThanOrEqual(HEADER_ROOM_360);
   });
 
   it("borrows the line for the guess pause (with time left) and the daily notice", () => {
@@ -153,11 +162,9 @@ describe("header line (D42)", () => {
   });
 });
 
-describe("fake problems", () => {
-  it("have four different choices and an answer for every band and level", () => {
-    for (const band of ["12", "34", "56"] as const) {
-      for (const level of [1, 2, 3]) expect(FAKE_PROBLEMS.some((p) => p.band === band && p.level === level)).toBe(true);
-    }
+describe("fake problems (5~6학년 until T9-2)", () => {
+  it("have four different choices and an answer for every level", () => {
+    for (const level of [1, 2, 3]) expect(FAKE_PROBLEMS.some((p) => p.band === "56" && p.level === level)).toBe(true);
     for (const p of FAKE_PROBLEMS) expect(new Set(p.choices.map((c) => JSON.stringify(c))).size).toBe(4);
   });
 

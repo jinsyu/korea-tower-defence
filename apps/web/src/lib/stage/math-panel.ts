@@ -1,5 +1,6 @@
 // Problem panel state on the screen (fake until the server deals and marks problems, T12).
 // Rules shown here follow spec "문제 흐름과 포인트", "난이도 이동" and "찍기·매크로·반복 막기".
+import { generateProblem, type MathLevel } from "@ktd/core";
 import { GRADE_BANDS, type GradeBandId } from "@/lib/grade-bands";
 import { fakeProblemsFor, type FakeProblem } from "./fake-problems";
 
@@ -25,7 +26,7 @@ export type PanelState = {
   level: 1 | 2 | 3;
   streak: number;
   wrongStreak: number;
-  /** Problems dealt so far; picks the next fake problem. */
+  /** Problems dealt so far; the seed of the next generated problem (or the next fake 5~6학년 problem). */
   dealt: number;
   /** The open problem. A level change applies from the next one. */
   problem: FakeProblem;
@@ -50,6 +51,7 @@ export type AnswerOutcome = {
 };
 
 function deal(band: GradeBandId, level: number, dealt: number): FakeProblem {
+  if (band !== "56") return generateProblem(band, level as MathLevel, dealt);
   const list = fakeProblemsFor(band, level);
   return list[dealt % list.length]!;
 }

@@ -273,7 +273,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T9-1: 수학 생성기 — 1~2·3~4학년군 — DoD: D27, D28·D29·D30·D31(이 학년군)
 
-- [ ] T9-1
+- [x] T9-1
 - 기준: spec "학년군별 수학 문제", `~/.claude/skills/elementary-problem-generator/references/` 성취기준·품질 기준(읽기만)
 
 - `packages/core/math/levels.ts`: 유형표
@@ -285,7 +285,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 - 시드 10,000개 검사 시험: 범위, 정답 1개, 보기 서로 다름, ±1 오답 1개 이하, 나머지 < 나누는 수, 정답 위치 25% ± 3%, 조사 자리표시 0, 서로 다른 문제 18개 이상
 - 검증 명령
   ```sh
-  pnpm test --filter core -- math
+  pnpm test --project core math
   ```
 - 완료 기준: 위 DoD를 1~2·3~4학년군에서 통과
 
@@ -300,7 +300,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 - 같은 10,000개 검사 + 소수 넷째 자리 이하 0, 대분수의 분수 부분은 진분수, 약분 문제는 모양으로 채점
 - 검증 명령
   ```sh
-  pnpm test --filter core -- math && pnpm --filter web build
+  pnpm test --project core math && pnpm --filter web build
   ```
 - 완료 기준: D27~D31 전체 통과(세 학년군)
 

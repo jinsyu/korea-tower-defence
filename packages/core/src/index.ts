@@ -6,3 +6,4 @@ export * from "./balloons";
 export * from "./names";
 export * from "./stage";
 export * from "./format";
+export * from "./game/waves";

@@ -31,8 +31,8 @@ async function solveRight(key: string) {
 /** Guardians written straight into the database (a big fake region), with points this hour. */
 function seedGuardians(region: string, list: { points: number; stage?: number; pickedAt?: number }[]): string[] {
   const insert = db().prepare(
-    `INSERT INTO guardians (id, code_hash, nick_adj, nick_noun, nick_tag, band, region, region_picked_at, tower_type, stage, last_seen_on)
-     VALUES (?, ?, 1, 2, ?, '34', ?, ?, 'rapid', ?, ?)`,
+    `INSERT INTO guardians (id, code_hash, nick_adj, nick_noun, nick_tag, region, region_picked_at, tower_type, stage, last_seen_on)
+     VALUES (?, ?, 1, 2, ?, ?, ?, 'rapid', ?, ?)`,
   );
   const points = db().prepare("INSERT INTO guardian_points_hourly (guardian_id, hour, points) VALUES (?, ?, ?)");
   const ids: string[] = [];

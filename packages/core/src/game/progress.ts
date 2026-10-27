@@ -9,7 +9,7 @@ const ONE = BigInt(1);
 const TWO = BigInt(2);
 const HUNDRED = BigInt(100);
 
-/** Points for a correct answer at each problem level, the same for every grade band (Q27). */
+/** Points for a correct answer at each problem level (Q27). */
 export const ANSWER_POINTS: Readonly<Record<MathLevel, bigint>> = { 1: BigInt(10), 2: BigInt(12), 3: BigInt(15) };
 /** Daily cut-down (Korean day): correct answers up to 150 at 100%, up to 300 at 50%, then 10%. */
 export const FULL_POINTS_UNTIL = BigInt(150);

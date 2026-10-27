@@ -16,7 +16,6 @@ CREATE TABLE IF NOT EXISTS guardians (
   nick_adj INTEGER NOT NULL,
   nick_noun INTEGER NOT NULL,
   nick_tag INTEGER NOT NULL,
-  band TEXT NOT NULL,
   region TEXT NOT NULL,
   region_picked_at INTEGER NOT NULL,
   region_changed_on TEXT,
@@ -63,7 +62,6 @@ CREATE TABLE IF NOT EXISTS open_problems (
   guardian_id TEXT PRIMARY KEY REFERENCES guardians(id) ON DELETE CASCADE,
   id TEXT NOT NULL UNIQUE,
   seed INTEGER NOT NULL,
-  band TEXT NOT NULL,
   level INTEGER NOT NULL,
   answer INTEGER NOT NULL,
   sent_at INTEGER NOT NULL

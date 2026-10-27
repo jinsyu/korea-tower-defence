@@ -13,9 +13,9 @@ import { TOWER_TYPE_INFO } from "@/lib/tower-types";
 
 const labelClass = "min-w-0 truncate font-heading text-lg text-yellow";
 
-/** Step 3: nickname from the server's candidates and a tower type. "다음" makes the guardian on the server. */
+/** Step 2: nickname from the server's candidates and a tower type. "다음" makes the guardian on the server. */
 export function NickPicker() {
-  const { band, region, nickname, setNickname, towerType, setTowerType, issueCode, issuedId } = useStartFlow();
+  const { region, nickname, setNickname, towerType, setTowerType, issueCode, issuedId } = useStartFlow();
   const router = useRouter();
   const { candidates, reroll, failed } = useNickCandidates();
   // After "다시 뽑기" the old pick is gone from the list, so the first new candidate is picked.
@@ -30,7 +30,7 @@ export function NickPicker() {
     setError(null);
     const res = await callServer<Created>("/guardians", {
       method: "POST",
-      body: { band, region: region.code, nick: picked, towerType, replaceKey: replaceKeyFor(issuedId > 0) },
+      body: { region: region.code, nick: picked, towerType, replaceKey: replaceKeyFor(issuedId > 0) },
     });
     setBusy(false);
     if (res.ok) {
@@ -47,7 +47,7 @@ export function NickPicker() {
   return (
     <main className="grid flex-1 items-center justify-items-center bg-[radial-gradient(ellipse_at_70%_20%,rgb(27_63_134/0.5),transparent_60%)] p-3">
       <div className="grid w-[min(1100px,100%)] min-w-0 gap-2">
-        <BugTag live="방송 준비 3/4">{region ? `${region.name} 지킴이 등록` : "지킴이 등록"}</BugTag>
+        <BugTag live="방송 준비 2/3">{region ? `${region.name} 지킴이 등록` : "지킴이 등록"}</BugTag>
         <h1 className="font-heading text-[clamp(28px,4.4vw,64px)] leading-[1.05]">내 타워 만들기</h1>
 
         <div className="flex min-w-0 items-center justify-between gap-2">

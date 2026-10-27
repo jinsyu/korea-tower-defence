@@ -3,10 +3,10 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
 import { E2E_GAME_SERVER, E2E_WEB } from "./env";
 
 /** A fresh guardian on the test server; its device key goes into the page's storage before the app starts. */
-async function newGuardian(request: APIRequestContext, band: "12" | "34" | "56" = "34"): Promise<string> {
+async function newGuardian(request: APIRequestContext): Promise<string> {
   const res = await request.post(`${E2E_GAME_SERVER}/guardians`, {
     headers: { origin: E2E_WEB },
-    data: { band, region: "11010", nick: { adj: 0, noun: 0, tag: 1 }, towerType: "splash" },
+    data: { region: "11010", nick: { adj: 0, noun: 0, tag: 1 }, towerType: "splash" },
   });
   expect(res.status()).toBe(201);
   return (await res.json()).key;
@@ -46,9 +46,11 @@ async function answerFirst(page: Page): Promise<boolean> {
 const me = async (request: APIRequestContext, key: string) =>
   (await (await request.get(`${E2E_GAME_SERVER}/me`, { headers: { origin: E2E_WEB, authorization: `Bearer ${key}` } })).json()).me;
 
-// The no-repeat check here runs on 3~4학년 (thousands of expressions), so it rarely bites. The rule itself, down to
-// the 36-expression 1~2학년 levels, is tested on the server (apps/server/src/math.test.ts, "repeats a level of 36").
-test("D32: 100 problems in a row, each new one in time, the same one after a reload, none of the last 50 again", async ({ page, request }) => {
+// Pressing the first choice is mostly wrong, so the guardian stays on the 36-expression levels (2·5·3·4단 or 6·7·8·9단):
+// an expression comes back no sooner than 36 problems later, i.e. never within the last min(50, 36 − 1) = 35.
+// The rule itself is tested on the server (apps/server/src/math.test.ts, "repeats a level of 36", "last 50").
+const NO_REPEAT_WITHIN = 35;
+test("D32: 100 problems in a row, each new one in time, the same one after a reload, no recent one again", async ({ page, request }) => {
   test.setTimeout(240_000);
   await openPlay(page, await newGuardian(request));
   const first = await problemId(page);
@@ -61,7 +63,7 @@ test("D32: 100 problems in a row, each new one in time, the same one after a rel
   for (let n = 0; n < 100; n++) {
     const id = await problemId(page);
     const text = (await expr(page).textContent())!;
-    expect(seen.slice(-50), `problem ${n + 1} repeats a recent expression`).not.toContain(text);
+    expect(seen.slice(-NO_REPEAT_WITHIN), `problem ${n + 1} repeats a recent expression`).not.toContain(text);
     seen.push(text);
     const correct = await answerFirst(page);
     const at = Date.now();

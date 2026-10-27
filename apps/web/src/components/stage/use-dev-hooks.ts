@@ -1,10 +1,9 @@
 "use client";
 
-import { boardTowers, generateProblem, type Guardian, type StageFile } from "@ktd/core";
+import { boardTowers, type Guardian, type StageFile } from "@ktd/core";
 import { useEffect, useRef } from "react";
-import type { GradeBandId } from "@/lib/grade-bands";
 import { FAKE_ME, FAKE_REGION, type RegionHud } from "@/lib/stage/fake-region";
-import { newPanel, nextProblem, type PanelState } from "@/lib/stage/math-panel";
+import { nextProblem, type PanelState } from "@/lib/stage/math-panel";
 import { meStore, needXP, upCost } from "@/lib/stage/me-store";
 import type { StageEvent } from "@/lib/stage/sim";
 import type { AwayNews } from "./news-sheet";
@@ -31,8 +30,6 @@ export const DEMO_NAMES = [
   "levelup",
   "offline",
   "away",
-  "band34",
-  "band56",
 ] as const;
 type DemoName = (typeof DEMO_NAMES)[number];
 
@@ -88,16 +85,6 @@ export function useDevHooks(
     const growTo = (step: number) => {
       meStore.set({ ...meStore.get(), step, wallet: upCost(step) - 5 });
       clickOpt("right", fresh());
-    };
-    /** `&level=3&seed=4973&type=분수 나눗셈` in the address opens that exact generated problem (screen checks). */
-    const setBand = (band: GradeBandId) => {
-      meStore.set({ ...meStore.get(), band });
-      const q = new URLSearchParams(window.location.search);
-      const level = Number(q.get("level") ?? 1) as 1 | 2 | 3;
-      const seed = Number(q.get("seed") ?? 0);
-      const panel = newPanel(band, Date.now(), level);
-      const problem = generateProblem(band, level, seed, q.get("type") ?? undefined);
-      actionsRef.current.setPanel({ ...panel, dealt: seed, problem });
     };
 
     const demo = (name: DemoName) => {
@@ -203,12 +190,6 @@ export function useDevHooks(
         case "away":
           a.setNews(FAKE_NEWS);
           break;
-        case "band34":
-          setBand("34");
-          break;
-        case "band56":
-          setBand("56");
-          break;
         default:
           return false;
       }
@@ -247,8 +228,6 @@ export function useDevHooks(
       const expr = $("[data-slot=math-expr]");
       const choices = math ? [...math.querySelectorAll<HTMLButtonElement>("[data-choice]")] : [];
       const visibleChoices = choices.filter(shown);
-      const fractions = math ? [...math.querySelectorAll(".mq-expr .fr, .mq-opt .fr")] : [];
-      const solutionFractions = math ? [...math.querySelectorAll(".mq-sol .fr")] : [];
       const meBar = $("[data-slot=me-bar]");
       const barStep = $("[data-slot=me-step]")?.firstChild?.textContent;
       return {
@@ -273,9 +252,7 @@ export function useDevHooks(
         mathChoiceVisible: visibleChoices.length,
         mathChoiceMinPx: visibleChoices.length ? Math.round(Math.min(...visibleChoices.map((b) => b.getBoundingClientRect().height)) * 10) / 10 : null,
         mathChoicesDisabled: choices.length > 0 && choices.every((b) => b.disabled),
-        mathFractionFontPx: fractions.length ? Math.min(...fractions.map((f) => px(f)!)) : null,
         mathSolutionShown: !!$("[data-slot=math-solution]"),
-        mathSolutionFractionFontPx: solutionFractions.length ? Math.min(...solutionFractions.map((f) => px(f)!)) : null,
         mathFitsNoScroll: !verticalScroll && !!mathRect && mathRect.bottom <= window.innerHeight + 0.5,
         meBarVisible: !!meBar && shown(meBar) && meBar.getBoundingClientRect().bottom <= window.innerHeight + 0.5,
         meBarHeightPx: meBar ? Math.round(meBar.getBoundingClientRect().height) : null,

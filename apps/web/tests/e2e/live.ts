@@ -6,7 +6,7 @@ import { E2E_GAME_SERVER, E2E_WEB } from "./env";
 export async function newGuardian(request: APIRequestContext, region: string, tag = 1): Promise<string> {
   const res = await request.post(`${E2E_GAME_SERVER}/guardians`, {
     headers: { origin: E2E_WEB },
-    data: { band: "34", region, nick: { adj: 0, noun: 0, tag }, towerType: "splash" },
+    data: { region, nick: { adj: 0, noun: 0, tag }, towerType: "splash" },
   });
   expect(res.status()).toBe(201);
   return (await res.json()).key;

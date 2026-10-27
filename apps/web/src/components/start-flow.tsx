@@ -6,13 +6,10 @@ import { createContext, useCallback, useContext, useState, type ReactNode } from
 import { createCodeHandoff, type CodeHandoff } from "@/lib/code-handoff";
 import { RegionPicker, type PickedRegion } from "@/components/korea-map/region-picker";
 import type { Nick } from "@/lib/game-server";
-import { DEFAULT_GRADE_BAND, type GradeBandId } from "@/lib/grade-bands";
 
 // Choices made during the first-entry screens, sent to the server when the guardian is made (nick screen).
 // The recovery code the server returns lives only here, in memory, until the code screen has shown it once.
 type StartFlow = {
-  band: GradeBandId;
-  setBand: (band: GradeBandId) => void;
   region: PickedRegion | null;
   setRegion: (region: PickedRegion) => void;
   nickname: Nick | null;
@@ -28,7 +25,6 @@ type StartFlow = {
 const StartFlowContext = createContext<StartFlow | null>(null);
 
 export function StartFlowProvider({ children }: { children: ReactNode }) {
-  const [band, setBand] = useState<GradeBandId>(DEFAULT_GRADE_BAND);
   const [region, setRegion] = useState<PickedRegion | null>(null);
   const [nickname, setNickname] = useState<Nick | null>(null);
   const [towerType, setTowerType] = useState<TowerType>("rapid");
@@ -37,7 +33,7 @@ export function StartFlowProvider({ children }: { children: ReactNode }) {
   const issueCode = useCallback((code: RecoveryCode) => setIssuedId(codeHandoff.issue(code)), [codeHandoff]);
   return (
     <StartFlowContext.Provider
-      value={{ band, setBand, region, setRegion, nickname, setNickname, towerType, setTowerType, issueCode, issuedId, codeHandoff }}
+      value={{ region, setRegion, nickname, setNickname, towerType, setTowerType, issueCode, issuedId, codeHandoff }}
     >
       {children}
     </StartFlowContext.Provider>
@@ -50,7 +46,7 @@ export function useStartFlow(): StartFlow {
   return flow;
 }
 
-/** Step 2 of the first entry: the picked region goes into the flow, then on to the nickname. */
+/** Step 1 of the first entry: the picked region goes into the flow, then on to the nickname. */
 export function StartRegionPicker() {
   const { setRegion } = useStartFlow();
   const router = useRouter();

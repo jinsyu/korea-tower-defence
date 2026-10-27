@@ -1,17 +1,9 @@
 // A generated problem and the shared step that turns an answer and its wrong-answer candidates into four choices.
-import type { MathBand, MathLevel, ProblemType } from "./levels";
+import type { MathLevel, ProblemType } from "./levels";
 import type { Rng } from "./random";
-import { decimalPlaces, sub, type Rational } from "./rational";
-import { fractionText, plainText, quotientText, type MathText } from "./text";
-
-/**
- * A choice's value: a number, a quotient with its remainder, or an exact fraction (5~6학년, also for decimals).
- * Choices are marked by value; fractions are always shown in lowest terms, so equal values never look different.
- */
-export type ChoiceValue = number | { q: number; r: number } | Rational;
+import { plainText, type MathText } from "./text";
 
 export type Problem = {
-  band: MathBand;
   level: MathLevel;
   /** Header type name, e.g. "곱셈구구". */
   type: string;
@@ -20,7 +12,7 @@ export type Problem = {
   key: string;
   expr: MathText;
   choices: [MathText, MathText, MathText, MathText];
-  values: [ChoiceValue, ChoiceValue, ChoiceValue, ChoiceValue];
+  values: [number, number, number, number];
   answer: 0 | 1 | 2 | 3;
   /** One or two lines; `result` is shown bold at the end. */
   solution: { text: MathText; result: MathText };
@@ -67,56 +59,24 @@ export const numberRules = (answer: number, max: number): ChoiceRules<number> =>
   key: String,
 });
 
-export type Quotient = { q: number; r: number };
-
-export const quotientRules = (divisor: number, maxQuotient: number): ChoiceRules<Quotient> => ({
-  valid: (v) => v.q >= 1 && v.q <= maxQuotient && v.r >= 0 && v.r < divisor,
-  near: (v, a) => Math.abs(v.q - a.q) + Math.abs(v.r - a.r) === 1,
-  key: (v) => `${v.q}r${v.r}`,
-});
-
-/**
- * Fractions and decimals of a 5~6학년 type: positive, below `max`, a reduced denominator up to `maxDen`, and for
- * decimals at most three places (no fourth place). ±1 means a value exactly one away.
- */
-export const rationalRules = (opts: { max: number; maxDen: number; decimal?: boolean }): ChoiceRules<Rational> => ({
-  valid: (v) => {
-    if (v.n <= 0 || v.n >= opts.max * v.d || v.d > opts.maxDen) return false;
-    if (!opts.decimal) return true;
-    const places = decimalPlaces(v);
-    return places !== null && places <= 3;
-  },
-  near: (v, a) => {
-    const diff = sub(v, a);
-    return diff.d === 1 && Math.abs(diff.n) === 1;
-  },
-  key: (v) => `${v.n}/${v.d}`,
-});
-
-type Draft<V> = {
+type Draft = {
   type: ProblemType;
   expr: MathText;
-  answer: V;
-  candidates: Iterable<V>;
-  rules: ChoiceRules<V>;
+  answer: number;
+  candidates: Iterable<number>;
+  rules: ChoiceRules<number>;
   solution: { text: MathText; result: MathText };
-  /** How a choice is drawn; fractions by default. Decimal problems pass `decimalText`. */
-  show?: (v: V) => MathText;
 };
 
-const valueText = (v: ChoiceValue): MathText =>
-  typeof v === "number" ? [String(v)] : "q" in v ? quotientText(v.q, v.r) : fractionText(v);
-
-export function finishProblem<V extends ChoiceValue>(rng: Rng, band: MathBand, level: MathLevel, d: Draft<V>): Problem {
+export function finishProblem(rng: Rng, level: MathLevel, d: Draft): Problem {
   const { values, answer } = pickChoices(rng, d.answer, d.candidates, d.rules);
   return {
-    band,
     level,
     type: d.type.name,
     standards: d.type.standards,
     key: plainText(d.expr),
     expr: d.expr,
-    choices: values.map(d.show ?? valueText) as Problem["choices"],
+    choices: values.map((v) => [String(v)]) as Problem["choices"],
     values,
     answer,
     solution: d.solution,

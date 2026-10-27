@@ -8,7 +8,6 @@ import HomePage from "@/app/page";
 import InfoPage from "@/app/info/page";
 import PlayPage from "@/app/play/page";
 import CodePage from "@/app/start/code/page";
-import { GradePicker } from "@/components/grade-picker";
 import { NickPicker } from "@/components/nick-picker";
 import { RestorePad } from "@/components/restore-pad";
 import { StartFlowProvider, StartRegionPicker } from "@/components/start-flow";
@@ -22,10 +21,9 @@ vi.mock("next/navigation", () => ({
 const render = (screen: ComponentType) =>
   renderToStaticMarkup(createElement(StartFlowProvider, null, createElement(screen)));
 
-// D1 order: home -> grade -> region -> nick -> code -> defence screen; restore is the other way in.
+// D1 order (spec 4판): home -> region -> nick -> code -> defence screen; restore is the other way in.
 const FLOW: [string, ComponentType][] = [
   ["home", HomePage],
-  ["grade", GradePicker],
   ["region", StartRegionPicker],
   ["nick", NickPicker],
   ["code", CodePage],
@@ -50,8 +48,12 @@ describe("first-entry flow has no free-text field (D1, D68)", () => {
     expect(html).not.toMatch(FREE_TEXT);
   });
 
+  it.each(FLOW)("%s never asks for a grade (spec 4판: no 학년군 screen)", (_name, screen) => {
+    expect(render(screen)).not.toMatch(/학년|start\/grade/);
+  });
+
   it("links the flow together", () => {
-    expect(render(HomePage)).toContain('href="/start/grade"');
+    expect(render(HomePage)).toContain('href="/start/region"');
     expect(render(HomePage)).toContain('href="/restore"');
     expect(render(HomePage)).toContain('href="/info"');
     expect(render(CodePage)).toContain('href="/play"');
@@ -71,12 +73,9 @@ describe("info screen wording (D73)", () => {
     "만드는 방법",
     "준비 중",
     "[2수01-11]",
-    "[4수01-04]",
-    "[6수01-08]",
     "에셋 출처",
     "서버에 무엇을 저장하나요",
     "별명 번호",
-    "학년군",
     "지킬 지역",
     "레벨·포인트·타워",
     "최근 50문제",
@@ -101,7 +100,7 @@ function sourceFiles(dir: string): string[] {
 
 describe("screen sources (D68)", () => {
   const files = sourceFiles(srcDir);
-  it.each(["<input", "<textarea", "contentEditable", "getUserMedia", "geolocation"])("never contain %s", (word) => {
+  it.each(["<input", "<textarea", "contentEditable", "getUserMedia", "geolocation", "/start/grade", "/me/band"])("never contain %s", (word) => {
     expect(files.filter((f) => readFileSync(f, "utf8").includes(word))).toEqual([]);
   });
 });

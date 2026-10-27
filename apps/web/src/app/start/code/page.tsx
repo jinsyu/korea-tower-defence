@@ -18,7 +18,7 @@ export default function CodePage() {
   return (
     <main className="grid flex-1 place-items-center p-3.5">
       <div className="grid w-[min(900px,100%)] min-w-0 gap-3">
-        <BugTag live="방송 준비 4/4">이 코드는 지금 한 번만 보여요</BugTag>
+        <BugTag live="방송 준비 3/3">이 코드는 지금 한 번만 보여요</BugTag>
         <h1 className="font-heading text-[clamp(28px,4.4vw,64px)] leading-[1.05]">내 복구 코드예요</h1>
         <CodeReveal />
         <ul className="list-disc border-l-4 border-cyan bg-navy py-2.5 pr-3 pl-7 text-sm leading-[1.6] text-[#dfe7ff]">

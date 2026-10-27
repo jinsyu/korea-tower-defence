@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { callAsGuardian } from "@/lib/game-server";
-import type { GradeBandId } from "@/lib/grade-bands";
 import { NEXT_AFTER_LEVEL_UP_MS, NEXT_AFTER_MS, REDUCED_NEXT_AFTER_MS, type PanelView } from "@/lib/stage/math-panel";
 import { canAnswer, loadingView, markedView, problemView, type AnswerReply, type ProblemReply } from "@/lib/stage/server-math";
 
@@ -12,7 +11,6 @@ const RETRY_MS = 3000;
 type Options = {
   /** Off on the dev-only `?demo=` screens, which deal their own problems. */
   enabled: boolean;
-  band: GradeBandId;
   offline: boolean;
   /** A marked answer: effects, banners and my new state. */
   onAnswered: (reply: AnswerReply) => void;
@@ -27,8 +25,8 @@ type Options = {
  * takes a number, and a reply whose number is no longer the newest (or that lands after the screen went away) is
  * dropped, so a late answer never overwrites a newer problem.
  */
-export function useServerMath({ enabled, band, offline, onAnswered, onUnreachable, onGone }: Options) {
-  const [view, setView] = useState<PanelView>(() => loadingView(band));
+export function useServerMath({ enabled, offline, onAnswered, onUnreachable, onGone }: Options) {
+  const [view, setView] = useState<PanelView>(loadingView);
   const seq = useRef(0);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   /** The next problem was due while offline; it comes when the connection is back (D58). */

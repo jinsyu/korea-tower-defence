@@ -36,7 +36,7 @@ describe("http basics", () => {
 
   it("answers the CORS preflight for the allowed origin only", async () => {
     const pre = (origin: string) =>
-      fetch(`${h.baseUrl}/me/band`, {
+      fetch(`${h.baseUrl}/me/nick`, {
         method: "OPTIONS",
         headers: { origin, "access-control-request-method": "POST", "access-control-request-headers": "authorization, content-type" },
       });
@@ -50,7 +50,7 @@ describe("http basics", () => {
   });
 });
 
-describe("new guardian and nicknames (D1, D3, D26)", () => {
+describe("new guardian and nicknames (D1, D3)", () => {
   it("hands out three nickname candidates from the word lists", async () => {
     const { status, body } = await h.api("/nicks");
     expect(status).toBe(200);
@@ -65,7 +65,6 @@ describe("new guardian and nicknames (D1, D3, D26)", () => {
     expect(made.me).toMatchObject({
       name: "씩씩한 수달",
       tag: "0427",
-      band: "34",
       region: "11010",
       towerType: "splash",
       level: "1",
@@ -79,15 +78,14 @@ describe("new guardian and nicknames (D1, D3, D26)", () => {
     expect(JSON.stringify(me.body)).not.toContain(made.code.words[0]);
   });
 
-  it("refuses nickname numbers outside the lists, unknown bands, regions and tower types", async () => {
-    const base = { band: "12", region: "11010", nick: { adj: 0, noun: 0, tag: 1 }, towerType: "rapid" };
+  it("refuses nickname numbers outside the lists, unknown regions and tower types", async () => {
+    const base = { region: "11010", nick: { adj: 0, noun: 0, tag: 1 }, towerType: "rapid" };
     const bad = [
       { nick: { adj: 9999, noun: 0, tag: 1 } },
       { nick: { adj: 0, noun: -1, tag: 1 } },
       { nick: { adj: 0, noun: 0, tag: 10000 } },
       { nick: { adj: 0.5, noun: 0, tag: 1 } },
       { nick: "씩씩한 수달" },
-      { band: "78" },
       { region: "99999" },
       { towerType: "laser" },
     ];
@@ -97,12 +95,14 @@ describe("new guardian and nicknames (D1, D3, D26)", () => {
     expect(guardianCount()).toBe(0);
   });
 
-  it("changes the band to its first step and keeps points, level and tower (D26)", async () => {
-    const { key } = await h.newGuardian();
-    h.server.db.prepare("UPDATE guardians SET total_points = 500, level = 5, stage = 9, math_step = 3").run();
-    const res = await h.api("/me/band", { method: "POST", key, body: { band: "56" } });
-    expect(res.body.me).toMatchObject({ band: "56", points: "500", level: "5", stage: "9" });
-    expect((h.server.db.prepare("SELECT math_step FROM guardians").get() as any).math_step).toBe(1);
+  it("keeps no grade band: none in my state or the database, no /me/band, a band sent along is ignored (spec 4판)", async () => {
+    const { key, me } = await h.newGuardian({ band: "56" });
+    expect(me).not.toHaveProperty("band");
+    expect((await h.api("/me/band", { method: "POST", key, body: { band: "12" } })).status).toBe(404);
+    for (const table of ["guardians", "open_problems"]) {
+      const columns = (h.server.db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]).map((c) => c.name);
+      expect(columns, table).not.toContain("band");
+    }
   });
 
   it("changes the nickname to another list nickname only", async () => {
@@ -127,7 +127,7 @@ describe("device key (D6, D54)", () => {
   it("ignores points, stage, power and wave values sent by the screen (D54)", async () => {
     const made = await h.newGuardian({ points: 999999, stage: 500, level: 99, power: "1000000", wave: 777, id: "someone" });
     expect(made.me).toMatchObject({ points: "0", stage: "1", level: "1", power: "10" });
-    const res = await h.api("/me/band", { method: "POST", key: made.key, body: { band: "12", points: 5, stage: 3 } });
+    const res = await h.api("/me/nick", { method: "POST", key: made.key, body: { nick: { adj: 1, noun: 2, tag: 5 }, points: 5, stage: 3 } });
     expect(res.body.me).toMatchObject({ points: "0", stage: "1" });
     await h.server.flushPower();
     expect(regionRow("11010").next_power).toBe("10");
@@ -152,7 +152,7 @@ describe("device key (D6, D54)", () => {
 
 describe("recovery code (D4, D5)", () => {
   it("continues the same guardian in another browser with a new key; the first key keeps working", async () => {
-    const a = await h.newGuardian({ band: "56", region: "32540" });
+    const a = await h.newGuardian({ region: "32540" });
     // Progress the guardian as the problem server will (T12).
     h.server.db.prepare("UPDATE guardians SET total_points = 1234, wallet = 7, level = 6, stage = 12, tendency = 'luck'").run();
     const before = (await h.api("/me", { key: a.key })).body.me;
@@ -160,7 +160,7 @@ describe("recovery code (D4, D5)", () => {
     expect(res.status).toBe(200);
     expect(res.body.key).not.toBe(a.key);
     expect(res.body.me).toEqual(before);
-    expect(before).toMatchObject({ name: "씩씩한 수달", band: "56", region: "32540", level: "6", points: "1234", stage: "12" });
+    expect(before).toMatchObject({ name: "씩씩한 수달", region: "32540", level: "6", points: "1234", stage: "12" });
     expect(before.stats).toEqual({ power: "1", speed: "1", range: "1", luck: "2" });
     expect((await h.api("/me", { key: a.key })).status).toBe(200);
     expect((await h.api("/me", { key: res.body.key })).body.me).toEqual(before);
@@ -237,7 +237,7 @@ describe("new guardian limit per address (D40)", () => {
     const res = await h.api("/guardians", {
       method: "POST",
       ip: "10.1.1.1",
-      body: { band: "12", region: "11010", nick: { adj: 0, noun: 0, tag: 1 }, towerType: "rapid" },
+      body: { region: "11010", nick: { adj: 0, noun: 0, tag: 1 }, towerType: "rapid" },
     });
     expect(res).toEqual({ status: 429, body: { error: "too_many_guardians" } });
     await h.newGuardian({}, "10.1.1.2");

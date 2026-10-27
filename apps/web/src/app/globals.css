@@ -236,8 +236,7 @@
 
 /*
  * Problem panel (mockup B .mq). Sizes match panelMetrics() in packages/core/src/stage/screen.ts:
- * expression, choice row height (D41: 56px on phones 700px tall or less, 64px or more elsewhere) and,
- * in the 5~6 band, an expression row tall enough for a stacked fraction with 20px digits.
+ * expression and choice row height (D41: 56px on phones 700px tall or less, 64px or more elsewhere).
  */
 .mq {
   --expr: clamp(32px, 9vw, 48px);
@@ -260,32 +259,6 @@
     --oh: clamp(72px, 9vh, 108px);
     --opt: clamp(28px, 2.2vw, 46px);
   }
-}
-.mq[data-fractions] {
-  --expr-row: max(calc(var(--expr) * var(--expr-lh)), calc(max(20px, var(--expr) * 0.62) * 2.3));
-}
-.fr {
-  display: inline-grid;
-  vertical-align: middle;
-  text-align: center;
-  line-height: 1;
-  margin: 0 0.08em;
-}
-.fr > span:first-child {
-  border-bottom: 0.09em solid currentColor;
-  padding: 0 0.12em 0.07em;
-}
-.fr > span:last-child {
-  padding: 0.07em 0.12em 0;
-}
-.mq-expr .fr {
-  font-size: max(20px, calc(var(--expr) * 0.62));
-}
-.mq-opt .fr {
-  font-size: max(20px, 0.8em);
-}
-.mq-sol .fr {
-  font-size: max(20px, 0.85em);
 }
 
 @media (prefers-reduced-motion: reduce) {

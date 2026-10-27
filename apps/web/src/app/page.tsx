@@ -23,7 +23,7 @@ export default function Home() {
         </p>
         <HomeMap />
         <div className="flex flex-wrap gap-2.5">
-          <Link href="/start/grade" className={`${broadcastButton} bg-yellow`}>
+          <Link href="/start/region" className={`${broadcastButton} bg-yellow`}>
             처음 하기
           </Link>
           <Link href="/restore" className={`${broadcastButton} bg-white`}>

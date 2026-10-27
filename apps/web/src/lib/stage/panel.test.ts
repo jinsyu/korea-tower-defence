@@ -1,23 +1,8 @@
 // Problem panel and my-guardian state (T7): panel sizes at phone sizes (D41), header without levels (D42),
 // the fake answer rules the panel shows, and one store behind the board, the representative list and the level bar.
 import { readFileSync } from "node:fs";
-import {
-  estimateLabelSize,
-  generateProblem,
-  fitBoard,
-  fixedRects,
-  isWide,
-  labelOverlaps,
-  layoutStageLabels,
-  mapBox,
-  overlapArea,
-  panelMetrics,
-  parseStageFile,
-  phoneSideHeight,
-  type StageFile,
-} from "@ktd/core";
+import { generateProblem, mapBox, panelMetrics, parseStageFile, phoneSideHeight, type StageFile } from "@ktd/core";
 import { describe, expect, it } from "vitest";
-import { GRADE_BANDS } from "@/lib/grade-bands";
 import { josa, type Problem } from "@ktd/core";
 import { spoken } from "./spoken";
 import { FAKE_ME, fakeGuardians } from "./fake-region";
@@ -54,53 +39,17 @@ const PHONES: [number, number][] = [
 ];
 
 describe.each(PHONES)("problem panel at %i×%i (D41)", (vw, vh) => {
-  it.each([false, true])("fits under the board on one screen (fractions %s)", (fractions) => {
-    const box = mapBox(vw, vh, fractions);
+  it("fits under the board on one screen", () => {
+    const box = mapBox(vw, vh);
     // padding 6 top, rows bug / strip / map / side with gap 4, padding 6 bottom.
-    expect(box.y + box.h + 4 + phoneSideHeight(vw, vh, fractions) + 6).toBeCloseTo(vh, 5);
+    expect(box.y + box.h + 4 + phoneSideHeight(vw, vh) + 6).toBeCloseTo(vh, 5);
     expect(box.h / vh).toBeGreaterThanOrEqual(0.4);
   });
 
-  it("uses 32px expressions, 20px fraction digits and big 2×2 choices", () => {
-    const m = panelMetrics(vw, vh, true);
+  it("uses 32px expressions and big 2×2 choices", () => {
+    const m = panelMetrics(vw, vh);
     expect(m.exprPx).toBeGreaterThanOrEqual(32);
-    expect(m.fracPx).toBeGreaterThanOrEqual(20);
     expect(m.choicePx).toBeGreaterThanOrEqual(vh <= 700 ? 56 : 64);
-    // A stacked fraction (2.23 em) fits its row.
-    expect(m.fracPx * 2.23).toBeLessThanOrEqual(m.exprRowPx);
-  });
-
-  it("keeps solution fractions at 20px or more inside the fixed choice row", () => {
-    const m = panelMetrics(vw, vh, true);
-    expect(m.solutionFracPx).toBeGreaterThanOrEqual(20);
-    // The solution takes the second choice row (fixed height), so a wrong answer leaves the panel height alone.
-    expect(panelMetrics(vw, vh, true).panelPx).toBe(m.panelPx);
-  });
-
-  it("keeps spots and labels right on the 5~6 band board too (D63)", () => {
-    const box = mapBox(vw, vh, true);
-    const v = fitBoard(box.w, box.h, stage.board);
-    expect(v.D).toBeGreaterThanOrEqual(44);
-    const spots = [...stage.repSpots, stage.mySpot].map(([x, y]) => [v.ox + x * v.s, v.oy + y * v.s] as const);
-    for (let i = 0; i < spots.length; i++) {
-      for (let j = i + 1; j < spots.length; j++) {
-        expect(Math.hypot(spots[i]![0] - spots[j]![0], spots[i]![1] - spots[j]![1]) - v.D).toBeGreaterThanOrEqual(8);
-      }
-    }
-    const rects = layoutStageLabels(stage, v, estimateLabelSize(isWide(vw, vh))).map((l) => l.rect);
-    const fixed = fixedRects(stage, v);
-    expect(labelOverlaps(rects, fixed.spots)).toBe(0);
-    expect(labelOverlaps(rects, fixed.gates)).toBe(0);
-    expect(labelOverlaps(rects, [fixed.base])).toBe(0);
-    for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) expect(overlapArea(rects[i]!, rects[j]!)).toBeLessThanOrEqual(0.5);
-  });
-});
-
-describe("panel CSS matches the metrics (D41)", () => {
-  const css = readFileSync(new URL("../../app/globals.css", import.meta.url), "utf8");
-  it.each([".mq-expr .fr", ".mq-opt .fr", ".mq-sol .fr"])("gives %s a 20px floor", (sel) => {
-    const rule = css.slice(css.indexOf(`${sel} {`));
-    expect(rule.slice(0, rule.indexOf("}"))).toMatch(/font-size:\s*max\(20px,/);
   });
 });
 
@@ -110,10 +59,9 @@ describe("problem panel on wide screens (D41)", () => {
     [1440, 900],
     [1920, 1080],
   ])("%i×%i: choices 64px or more, TV expression 48px or more", (vw, vh) => {
-    const m = panelMetrics(vw, vh, true);
+    const m = panelMetrics(vw, vh);
     expect(m.choicePx).toBeGreaterThanOrEqual(64);
     expect(m.exprPx).toBeGreaterThanOrEqual(48);
-    expect(m.fracPx).toBeGreaterThanOrEqual(20);
   });
 });
 
@@ -122,30 +70,18 @@ const headerWidth = (text: string) => [...text].reduce((w, c) => w + (/[가-힣]
 /** 360px: 344px row − "문제" tag 50px − skip button 88px − text padding 20px. */
 const HEADER_ROOM_360 = 344 - 50 - 88 - 20;
 
-/** Generated problems of every band and level, many seeds. */
-const SAMPLE_PROBLEMS: Problem[] = (["12", "34", "56"] as const).flatMap((band) =>
-  ([1, 2, 3] as const).flatMap((level) => Array.from({ length: 200 }, (_, seed) => generateProblem(band, level, seed))),
-);
+/** Generated problems of every level, many seeds. */
+const SAMPLE_PROBLEMS: Problem[] = ([1, 2, 3] as const).flatMap((level) => Array.from({ length: 200 }, (_, seed) => generateProblem(level, seed)));
 
 describe("header line (D42)", () => {
-  const panelFor = (p: Problem): PanelState => ({ ...newPanel(p.band, 0, p.level), problem: p });
+  const panelFor = (p: Problem): PanelState => ({ ...newPanel(0, p.level), problem: p });
 
-  it("is \"학년군 · 유형\" for every problem, with no level number or level word", () => {
+  it("is \"곱셈구구\" for every problem at every level, with no grade, level number or level word", () => {
     for (const p of SAMPLE_PROBLEMS) {
       const h = panelHeader(panelFor(p), 0);
-      const band = GRADE_BANDS.find((b) => b.id === p.band)!.label;
-      expect(h.text).toBe(`${band} · ${p.type}`);
-      expect(h.text).not.toMatch(/단계|레벨|Lv|level|[1-3]\s*단(?!원)/i);
+      expect(h.text).toBe("곱셈구구");
+      expect(h.text).not.toMatch(/학년|단계|레벨|Lv|level|[1-3]\s*단(?!원)/i);
     }
-  });
-
-  it("reads the same at every level of a type", () => {
-    const byType = new Map<string, Set<string>>();
-    for (const p of SAMPLE_PROBLEMS) {
-      const key = `${p.band}|${p.type}`;
-      byType.set(key, (byType.get(key) ?? new Set()).add(panelHeader(panelFor(p), 0).text));
-    }
-    for (const texts of byType.values()) expect(texts.size).toBe(1);
   });
 
   it("fits one line at 360px without an ellipsis", () => {
@@ -153,7 +89,7 @@ describe("header line (D42)", () => {
   });
 
   it("borrows the line for the guess pause (with time left) and the daily notice", () => {
-    const s = newPanel("12", 0);
+    const s = newPanel(0);
     expect(panelHeader({ ...s, pausedUntil: 300_000 }, 1000)).toEqual({ text: "포인트 멈춤 4:59 · 문제를 천천히 읽어 봐요", tone: "warn" });
     expect(panelHeader({ ...s, daily: true }, 0).tone).toBe("info");
     expect(panelHeader({ ...s, pausedUntil: 300_000 }, 300_000).tone).toBe("plain");
@@ -161,24 +97,14 @@ describe("header line (D42)", () => {
 });
 
 describe("spoken math", () => {
-  it("reads fractions and mixed numbers aloud", () => {
-    expect(spoken([{ fr: [3, 4] }, " + ", { fr: [1, 2] }])).toBe("4분의 3 더하기 2분의 1");
-    expect(spoken([{ fr: [3, 4], w: 1 }, " − ", { fr: [1, 3], w: 2 }])).toBe("1과 4분의 3 빼기 2와 3분의 1");
-  });
-
   it("reads \"=\" as 은 or 는 to fit the word before it", () => {
     const blank = { blank: true } as const;
-    expect(spoken(["4.32 ÷ 3.6 = ", blank])).toBe("4.32 나누기 3.6은 빈칸");
     expect(spoken(["7 × 8 = ", blank])).toBe("7 곱하기 8은 빈칸");
     expect(spoken(["4 × 9 = ", blank])).toBe("4 곱하기 9는 빈칸");
-    expect(spoken([{ fr: [3, 4] }, " + ", { fr: [1, 2] }, " = ", blank])).toBe("4분의 3 더하기 2분의 1은 빈칸");
-    expect(spoken([{ fr: [2, 5], w: 1 }, " × 3 = ", blank])).toBe("1과 5분의 2 곱하기 3은 빈칸");
-    expect(spoken([{ fr: [3, 5] }, " × 2 = ", blank])).toBe("5분의 3 곱하기 2는 빈칸");
-    expect(spoken([blank, " × 4 = 28"])).toBe("빈칸 곱하기 4는 28");
-    expect(spoken(["0.25 × 0.4 = ", blank])).toBe("0.25 곱하기 0.4는 빈칸");
+    expect(spoken(["6 × 1 = ", blank])).toBe("6 곱하기 1은 빈칸");
   });
 
-  it("picks the particle after \"=\" right in every band's expressions", () => {
+  it("picks the particle after \"=\" right in every level's expressions", () => {
     for (const p of SAMPLE_PROBLEMS) {
       const s = spoken(p.expr);
       expect(s, p.key).not.toMatch(/ 는 | = /);
@@ -188,10 +114,6 @@ describe("spoken math", () => {
     }
   });
 
-  it("deals 5~6학년 problems from the generator on the panel", () => {
-    expect(newPanel("56", 0, 1).problem.type).toMatch(/^분수 (덧셈|뺄셈)$/);
-    expect(newPanel("56", 0, 3).problem.type).toMatch(/^(분수|소수) 나눗셈$/);
-  });
 });
 
 describe("answer rules on the panel (fake until T12)", () => {
@@ -200,14 +122,14 @@ describe("answer rules on the panel (fake until T12)", () => {
   const answerWrong = (s: PanelState, now = s.shownAt + SLOW) => answerProblem(s, (s.problem.answer + 1) % 4, now);
 
   it("gives 10 / 12 / 15 points by level, nothing for a wrong answer", () => {
-    expect(answerRight(newPanel("12", 1000, 1)).answered.points).toBe(10);
-    expect(answerRight(newPanel("12", 1000, 2)).answered.points).toBe(12);
-    expect(answerRight(newPanel("12", 1000, 3)).answered.points).toBe(15);
-    expect(answerWrong(newPanel("12", 1000, 2)).answered).toMatchObject({ correct: false, points: 0 });
+    expect(answerRight(newPanel(1000, 1)).answered.points).toBe(10);
+    expect(answerRight(newPanel(1000, 2)).answered.points).toBe(12);
+    expect(answerRight(newPanel(1000, 3)).answered.points).toBe(15);
+    expect(answerWrong(newPanel(1000, 2)).answered).toMatchObject({ correct: false, points: 0 });
   });
 
   it("gives no points and keeps streaks for a too-fast answer", () => {
-    const s = { ...newPanel("12", 1000, 1), streak: 4 };
+    const s = { ...newPanel(1000, 1), streak: 4 };
     const fast = answerRight(s, s.shownAt + TOO_FAST_MS - 1);
     expect(fast.answered).toMatchObject({ correct: true, points: 0, note: "천천히 풀어도 괜찮아요" });
     expect(fast.state.streak).toBe(4);
@@ -215,7 +137,7 @@ describe("answer rules on the panel (fake until T12)", () => {
   });
 
   it("counts the first problem as too fast until it is shown, then from the moment it is shown", () => {
-    const s = newPanel("12", 0, 1);
+    const s = newPanel(0, 1);
     expect(answerRight(s, 5000).answered.points).toBe(0);
     const shown = markShown(s, 10_000);
     expect(answerRight(shown, 10_000).answered).toMatchObject({ points: 0, note: "천천히 풀어도 괜찮아요" });
@@ -226,7 +148,7 @@ describe("answer rules on the panel (fake until T12)", () => {
   });
 
   it("holds the next problem while offline and resumes with a full pause after reconnecting (D58)", () => {
-    const s = markShown(newPanel("12", 1000, 1), 1000);
+    const s = markShown(newPanel(1000, 1), 1000);
     const right = answerRight(s, 5000).state;
     expect(advanceDelay(right, false, 5000)).toBe(NEXT_AFTER_MS);
     // Connection lost right after the answer: nothing is scheduled, however long it stays offline.
@@ -243,23 +165,23 @@ describe("answer rules on the panel (fake until T12)", () => {
   });
 
   it("halves points on the daily notice and pauses them on a guess pause", () => {
-    expect(answerRight({ ...newPanel("12", 1000, 2), daily: true }).answered.points).toBe(6);
-    expect(answerRight({ ...newPanel("12", 1000, 2), pausedUntil: 1e9 }).answered).toMatchObject({ points: 0, note: "포인트 멈춤 중" });
+    expect(answerRight({ ...newPanel(1000, 2), daily: true }).answered.points).toBe(6);
+    expect(answerRight({ ...newPanel(1000, 2), pausedUntil: 1e9 }).answered).toMatchObject({ points: 0, note: "포인트 멈춤 중" });
   });
 
   it("moves up after 5 right and down after 3 wrong, keeping the open problem until the next one", () => {
-    const up = answerRight({ ...newPanel("12", 1000, 2), streak: 4 });
+    const up = answerRight({ ...newPanel(1000, 2), streak: 4 });
     expect(up.levelUp).toBe(true);
     expect(up.state.level).toBe(3);
     expect(up.state.problem.level).toBe(2);
     expect(nextProblem(up.state, 9000).problem.level).toBe(3);
-    const down = answerWrong({ ...newPanel("12", 1000, 2), wrongStreak: 2 });
+    const down = answerWrong({ ...newPanel(1000, 2), wrongStreak: 2 });
     expect(down.levelDown).toBe(true);
     expect(nextProblem(down.state, 9000).problem.level).toBe(1);
   });
 
   it("skips without points and without touching streaks", () => {
-    const s = { ...newPanel("34", 1000, 1), streak: 3, wrongStreak: 1 };
+    const s = { ...newPanel(1000, 1), streak: 3, wrongStreak: 1 };
     const next = nextProblem(s, 100);
     expect(next).toMatchObject({ streak: 3, wrongStreak: 1, answered: null, shownAt: 100 });
     expect(next.problem).not.toBe(s.problem);

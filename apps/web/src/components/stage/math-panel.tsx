@@ -1,7 +1,6 @@
 "use client";
 
 import type { MathText as MathTextValue } from "@ktd/core";
-import { Fraction } from "@/components/fraction";
 import type { Header, PanelView } from "@/lib/stage/math-panel";
 import { spoken } from "@/lib/stage/spoken";
 
@@ -15,18 +14,10 @@ const OPT_BASE =
   "mq-opt relative flex min-h-0 min-w-0 items-center justify-center gap-1.5 overflow-hidden px-2.5 py-1 font-heading text-(length:--opt) whitespace-nowrap text-navy [clip-path:polygon(8px_0,100%_0,calc(100%-8px)_100%,0_100%)] focus-visible:outline-3 focus-visible:-outline-offset-4 focus-visible:outline-navy disabled:text-navy";
 const OPT_LABEL = "absolute top-[3px] left-3 bg-navy px-1.5 font-sans text-[11px] leading-[1.4] font-black";
 
-/** Text with stacked fractions, small word labels and the answer blank. Decorative; callers give the spoken form. */
+/** Text with the answer blank. Decorative; callers give the spoken form. */
 export function MathText({ text }: { text: MathTextValue }) {
   return text.map((t, i) => {
     if (typeof t === "string") return <span key={i}>{t}</span>;
-    if ("fr" in t) return <Fraction key={i} n={t.fr[0]} d={t.fr[1]} w={t.w} />;
-    if ("small" in t) {
-      return (
-        <small key={i} className="font-sans text-xs font-black text-[#4a5a80]">
-          {t.small}
-        </small>
-      );
-    }
     return (
       <em key={i} className="inline-block min-w-[.9em] border-b-4 border-yellow leading-none text-yellow not-italic">
         ?
@@ -45,14 +36,13 @@ type Props = {
 };
 
 /**
- * Problem panel: header "학년군 · 유형", expression, 2×2 choices, skip.
+ * Problem panel: header "곱셈구구", expression, 2×2 choices, skip.
  * A wrong answer keeps my pick and the right answer in the first row and puts the solution in the second,
  * so the panel (and the board above it) never changes height.
  */
 export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
   const { problem: p, answered } = state;
   const wrong = answered !== null && !answered.correct;
-  const hasFraction = state.band === "56";
   const live = answered
     ? answered.correct
       ? `정답! ${answered.points}포인트${answered.note ? `. ${answered.note}` : ""}`
@@ -63,7 +53,6 @@ export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
     <section
       data-slot="math"
       aria-label="수학 문제"
-      data-fractions={hasFraction || undefined}
       data-problem={state.id}
       className="mq relative grid min-w-0 gap-1 border-t-4 border-yellow bg-navy pb-1.5"
     >
@@ -107,16 +96,14 @@ export function MathPanel({ state, header, offline, onPick, onNext }: Props) {
             const picked = answered?.pick === i;
             const isAnswer = i === answered?.answer;
             if (wrong && !picked && !isAnswer) return null;
-            // Labelled choices move down under the label; a tall fraction moves right of it instead.
-            const labelRoom = c.some((t) => typeof t === "object" && "fr" in t) ? "justify-end" : "pt-4";
             const look = !answered
               ? "bg-white"
               : picked && answered.correct
                 ? "animate-snap bg-[#3DDC84]"
                 : picked
-                  ? `animate-shake bg-[#C9D2E6] ${labelRoom} line-through decoration-navy decoration-3`
+                  ? "animate-shake bg-[#C9D2E6] pt-4 line-through decoration-navy decoration-3"
                   : wrong && isAnswer
-                    ? `bg-[#3DDC84] ${labelRoom}`
+                    ? "bg-[#3DDC84] pt-4"
                     : "bg-white";
             return (
               <button

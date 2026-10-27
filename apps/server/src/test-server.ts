@@ -98,7 +98,7 @@ export async function startServer({ rate = 1 }: { rate?: number } = {}): Promise
     const res = await api("/guardians", {
       method: "POST",
       ip,
-      body: { band: "34", region: "11010", nick: { adj: 0, noun: 0, tag: 427 }, towerType: "splash", ...fields },
+      body: { region: "11010", nick: { adj: 0, noun: 0, tag: 427 }, towerType: "splash", ...fields },
     });
     if (res.status !== 201) throw new Error(`create failed: ${res.status} ${JSON.stringify(res.body)}`);
     return res.body;

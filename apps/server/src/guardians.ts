@@ -10,7 +10,6 @@ import {
   TENDENCIES,
   TOWER_TYPES,
   towerPower,
-  type MathBand,
   type RecoveryCode,
   type Tendency,
   type TowerType,
@@ -21,7 +20,6 @@ import { addDays, kstDate } from "./dates";
 import type { Regions, RegionTruth } from "./regions";
 import { INACTIVE_DAYS, regionChangeStatus, type RegionChange } from "./rules";
 
-export const BANDS: readonly MathBand[] = ["12", "34", "56"];
 export const TAG_COUNT = 10_000;
 
 /** Nickname number: adjective index, noun index and a 4-digit tag (spec "별명"). */
@@ -47,7 +45,6 @@ export function nickCandidates(): Nick[] {
   }));
 }
 
-export const isBand = (v: unknown): v is MathBand => BANDS.includes(v as MathBand);
 export const isTowerType = (v: unknown): v is TowerType => TOWER_TYPES.includes(v as TowerType);
 export const isTendency = (v: unknown): v is Tendency => TENDENCIES.includes(v as Tendency);
 
@@ -59,7 +56,6 @@ export type GuardianRow = {
   nick_adj: number;
   nick_noun: number;
   nick_tag: number;
-  band: MathBand;
   region: string;
   region_picked_at: number;
   region_changed_on: string | null;
@@ -78,7 +74,6 @@ export type MeView = {
   nick: Nick;
   name: string;
   tag: string;
-  band: MathBand;
   region: string;
   regionChange: RegionChange;
   towerType: TowerType;
@@ -109,7 +104,6 @@ export function meView(g: GuardianRow, now: number, points24h: number): MeView {
     nick,
     name: nickName(nick),
     tag: nickTag(nick),
-    band: g.band,
     region: g.region,
     regionChange: regionChangeStatus(g.region_picked_at, g.region_changed_on, now),
     towerType: g.tower_type,
@@ -143,7 +137,7 @@ export function toLookChange(body: Record<string, unknown>): LookChange | null {
   return { towerType, tendency, color } as LookChange;
 }
 
-export type NewGuardian = { band: MathBand; region: string; nick: Nick; towerType: TowerType };
+export type NewGuardian = { region: string; nick: Nick; towerType: TowerType };
 
 export type Guardians = ReturnType<typeof createGuardians>;
 
@@ -161,11 +155,10 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     keyCount: db.prepare<[string], { n: number }>("SELECT COUNT(*) AS n FROM guardian_keys WHERE guardian_id = ?"),
     codeTaken: db.prepare<[string], { one: number }>("SELECT 1 AS one FROM guardians WHERE code_hash = ?"),
     insert: db.prepare(
-      `INSERT INTO guardians (id, code_hash, nick_adj, nick_noun, nick_tag, band, region, region_picked_at, tower_type, last_seen_on)
-       VALUES (@id, @code_hash, @nick_adj, @nick_noun, @nick_tag, @band, @region, @region_picked_at, @tower_type, @last_seen_on)`,
+      `INSERT INTO guardians (id, code_hash, nick_adj, nick_noun, nick_tag, region, region_picked_at, tower_type, last_seen_on)
+       VALUES (@id, @code_hash, @nick_adj, @nick_noun, @nick_tag, @region, @region_picked_at, @tower_type, @last_seen_on)`,
     ),
     insertKey: db.prepare("INSERT INTO guardian_keys (key_hash, guardian_id) VALUES (?, ?)"),
-    setBand: db.prepare("UPDATE guardians SET band = ?, math_step = 1, right_streak = 0, wrong_streak = 0 WHERE id = ?"),
     setNick: db.prepare("UPDATE guardians SET nick_adj = ?, nick_noun = ?, nick_tag = ? WHERE id = ?"),
     setLook: db.prepare("UPDATE guardians SET tower_type = ?, tendency = ?, color = ? WHERE id = ?"),
     setRegion: db.prepare("UPDATE guardians SET region = ?, region_changed_on = ? WHERE id = ?"),
@@ -210,7 +203,6 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
       nick_adj: input.nick.adj,
       nick_noun: input.nick.noun,
       nick_tag: input.nick.tag,
-      band: input.band,
       region: input.region,
       region_picked_at: now,
       tower_type: input.towerType,
@@ -234,12 +226,6 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
 
   function touch(id: string, now: number): void {
     q.touch.run(kstDate(now), id);
-  }
-
-  /** Changing the band starts its first step; points, level and tower stay (D26). */
-  function setBand(id: string, band: MathBand): GuardianRow {
-    q.setBand.run(band, id);
-    return get(id);
   }
 
   function setNick(id: string, nick: Nick): GuardianRow {
@@ -319,5 +305,5 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     return truth;
   }
 
-  return { regionTruth, byKey, codeExists, create, restore, touch, setBand, setNick, setLook, changeRegion, newCode, remove, removeUnusedByKey, purgeInactive };
+  return { regionTruth, byKey, codeExists, create, restore, touch, setNick, setLook, changeRegion, newCode, remove, removeUnusedByKey, purgeInactive };
 }

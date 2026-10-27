@@ -84,7 +84,7 @@ const call = (path: string, { key, body, ip = "10.0.0.1" }: { key?: string; body
 it("keeps every acknowledged point and goes on from the stored wave after a forced kill (D57)", { timeout: 60_000 }, async () => {
   const keys: string[] = [];
   for (let i = 0; i < 8; i++) {
-    const res = await call("/guardians", { body: { band: "12", region: REGION, nick: { adj: 1, noun: 1, tag: i }, towerType: "rapid" }, ip: `10.0.1.${i}` });
+    const res = await call("/guardians", { body: { region: REGION, nick: { adj: 1, noun: 1, tag: i }, towerType: "rapid" }, ip: `10.0.1.${i}` });
     keys.push(((await res.json()) as any).key);
   }
   const reader = new Database(env.DB_PATH!, { readonly: true });

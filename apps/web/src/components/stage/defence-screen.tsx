@@ -110,8 +110,8 @@ export function DefenceScreen() {
   const [tick, setTick] = useState(0);
   // My guardian: one store read by the board, the representative list and the level bar.
   const me = useSyncExternalStore(meStore.subscribe, meStore.get, meStore.get);
-  // Mockup B opens on a 1~2 band problem part way through a streak.
-  const [panel, setPanel] = useState<PanelState>(() => ({ ...newPanel(meStore.get().band, 0, 2), streak: 3 }));
+  // Mockup B opens on a level 2 problem part way through a streak.
+  const [panel, setPanel] = useState<PanelState>(() => ({ ...newPanel(0, 2), streak: 3 }));
   const [clock, setClock] = useState(0);
   // Demos switch the connection notice by hand; the server's room switches it for real.
   const [demoOffline, setOfflineState] = useState(false);
@@ -251,7 +251,7 @@ export function DefenceScreen() {
   }, []);
 
   const onUnreachable = useCallback(() => apiRef.current?.tip(OFFLINE_TEXT, 2600), []);
-  const server = useServerMath({ enabled: !demo, band: me.band, offline, onAnswered: onServerAnswer, onUnreachable, onGone });
+  const server = useServerMath({ enabled: !demo, offline, onAnswered: onServerAnswer, onUnreachable, onGone });
   const view: PanelView = demo ? panel : server.view;
 
   // The guess-pause and skip-wait headers count down once a second.

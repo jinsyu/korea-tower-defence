@@ -2,7 +2,6 @@
 // the dev-only `?demo=` screens still deal and mark here with the same rules (spec "문제 흐름과 포인트", "난이도 이동",
 // "찍기·매크로·반복 막기").
 import { generateProblem, type Problem } from "@ktd/core";
-import { GRADE_BANDS, type GradeBandId } from "@/lib/grade-bands";
 
 /** Points per correct answer by level (spec: 10, 12, 15). */
 export const LEVEL_POINTS = [10, 12, 15] as const;
@@ -29,7 +28,6 @@ export type ShownProblem = Pick<Problem, "type" | "expr" | "choices">;
 
 /** Everything the problem panel and its header draw. */
 export type PanelView = {
-  band: GradeBandId;
   problem: ShownProblem;
   answered: Answered | null;
   /** Guess suspicion: points paused until this time (Date.now()). */
@@ -45,7 +43,6 @@ export type PanelView = {
 };
 
 export type PanelState = {
-  band: GradeBandId;
   level: 1 | 2 | 3;
   streak: number;
   wrongStreak: number;
@@ -73,16 +70,15 @@ export type AnswerOutcome = {
   levelDown: boolean;
 };
 
-const deal = (band: GradeBandId, level: 1 | 2 | 3, dealt: number): Problem => generateProblem(band, level, dealt);
+const deal = (level: 1 | 2 | 3, dealt: number): Problem => generateProblem(level, dealt);
 
-export function newPanel(band: GradeBandId, now: number, level: 1 | 2 | 3 = 1): PanelState {
+export function newPanel(now: number, level: 1 | 2 | 3 = 1): PanelState {
   return {
-    band,
     level,
     streak: 0,
     wrongStreak: 0,
     dealt: 0,
-    problem: deal(band, level, 0),
+    problem: deal(level, 0),
     shownAt: now,
     answered: null,
     pausedUntil: 0,
@@ -98,7 +94,7 @@ export function markShown(s: PanelState, now: number): PanelState {
 
 /** Skip, or "다음 문제" after a wrong answer: no points, streaks unchanged. */
 export function nextProblem(s: PanelState, now: number): PanelState {
-  return { ...s, dealt: s.dealt + 1, problem: deal(s.band, s.level, s.dealt + 1), shownAt: now, answered: null, advanceAt: null };
+  return { ...s, dealt: s.dealt + 1, problem: deal(s.level, s.dealt + 1), shownAt: now, answered: null, advanceAt: null };
 }
 
 /** Milliseconds until the automatic next problem, or null: none pending, or held while offline (D58). */
@@ -154,7 +150,7 @@ export function answerProblem(s: PanelState, pick: number, now: number, reduced 
 export type Header = { text: string; tone: "plain" | "warn" | "info" };
 
 /**
- * Header line: "학년군 · 유형" (D42). Guess pause and the daily notice borrow the same line so the panel never grows.
+ * Header line: the type name, "곱셈구구" (D42). Guess pause and the daily notice borrow the same line so the panel never grows.
  * The level is never shown.
  */
 export function panelHeader(s: PanelView, now: number): Header {
@@ -166,7 +162,5 @@ export function panelHeader(s: PanelView, now: number): Header {
   const wait = (s.waitUntil ?? 0) - now;
   if (wait > 0) return { text: `잠깐 쉬었다 해요 · ${Math.ceil(wait / 1000)}초 뒤에 다음 문제`, tone: "info" };
   if (s.daily) return { text: `쉬어 가도 괜찮아요 · 지금은 포인트 ${s.dailyRate === 10 ? "10분의 1" : "절반"}`, tone: "info" };
-  return { text: `${bandLabel(s.band)} · ${s.problem.type}`, tone: "plain" };
+  return { text: s.problem.type, tone: "plain" };
 }
-
-export const bandLabel = (band: GradeBandId): string => GRADE_BANDS.find((b) => b.id === band)!.label;

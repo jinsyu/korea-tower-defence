@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, type ReactNode } from "react";
 import { NickChoices, useNickCandidates } from "@/components/nick-choices";
 import { callAsGuardian, dayLabel, NO_GUARDIAN_TEXT, OFFLINE_TEXT, type Nick, type ServerMe } from "@/lib/game-server";
-import { GRADE_BANDS } from "@/lib/grade-bands";
 import { regionName } from "@/lib/region-names";
 import { useMyGuardian } from "./use-my-guardian";
 
@@ -23,7 +22,7 @@ function Row({ title, children }: { title: string; children: ReactNode }) {
 
 const Note = ({ children }: { children: ReactNode }) => <p className="text-[13px] text-mut">{children}</p>;
 
-/** "내 지킴이 바꾸기" on the info screen: band, region and nickname, saved on the server (D7, D26). */
+/** "내 지킴이 바꾸기" on the info screen: region and nickname, saved on the server (D7). */
 export function MySettings() {
   const { guardian, update, reload } = useMyGuardian();
   const [message, setMessage] = useState<string | null>(null);
@@ -60,22 +59,6 @@ export function MySettings() {
 
   return (
     <div className="grid gap-1.5">
-      <Row title="학년군 바꾸기">
-        <Note>바꾸면 그 학년군의 첫 단계부터 문제가 나와요. 포인트·레벨·타워는 그대로예요.</Note>
-        <div role="group" aria-label="학년군" className="flex flex-wrap gap-2">
-          {GRADE_BANDS.map((b) => (
-            <button
-              key={b.id}
-              type="button"
-              aria-pressed={b.id === me.band}
-              onClick={() => void save("/me/band", { band: b.id }, `${b.label}으로 바꿨어요.`)}
-              className={`${smallButton} bg-white text-navy aria-pressed:bg-yellow`}
-            >
-              {b.label}
-            </button>
-          ))}
-        </div>
-      </Row>
       <Row title="지역 바꾸기">
         <Note>
           지금 지키는 지역: <b className="text-white">{regionName(me.region)}</b>. 처음 고른 뒤 24시간 안에는 한 번 바로 바꿀 수

@@ -4,7 +4,7 @@ import { Server as SocketServer } from "socket.io";
 import type { Config } from "./config";
 import { HOUR_MS, kstDate } from "./dates";
 import { createWriter, openDb, type Db } from "./db";
-import { createGuardians, isBand, isNick, isTowerType, meView, nickCandidates, toLookChange } from "./guardians";
+import { createGuardians, isNick, isTowerType, meView, nickCandidates, toLookChange } from "./guardians";
 import { createAddressLimits } from "./limits";
 import { isRoute, createLive, type Live } from "./live";
 import { createMath } from "./math";
@@ -108,8 +108,8 @@ export function createGameServer({ config, now = Date.now, rate = 1 }: GameServe
     // Only the listed fields are read; points, stage, power or waves sent by a screen are ignored (D54).
     // replaceKey: this device's key of the guardian it made before, when the child went back from the code screen.
     "POST /guardians": async (req, body) => {
-      const { band, region, nick, towerType, replaceKey } = body;
-      if (!isBand(band) || typeof region !== "string" || !REGION_CODES.has(region) || !isNick(nick) || !isTowerType(towerType)) {
+      const { region, nick, towerType, replaceKey } = body;
+      if (typeof region !== "string" || !REGION_CODES.has(region) || !isNick(nick) || !isTowerType(towerType)) {
         return bad;
       }
       const address = clientAddress(req);
@@ -118,7 +118,7 @@ export function createGameServer({ config, now = Date.now, rate = 1 }: GameServe
       const replaced = typeof replaceKey === "string" && KEY_SHAPE.test(replaceKey) ? replaceKey : null;
       const { made, removed } = await writer.run(() => ({
         removed: replaced ? guardians.removeUnusedByKey(replaced) : undefined,
-        made: guardians.create({ band, region, nick, towerType }, now()),
+        made: guardians.create({ region, nick, towerType }, now()),
       }));
       if (removed) io.in(`g:${removed}`).disconnectSockets(true);
       return { status: 201, body: { key: made.key, code: made.code, ...me(made.guardian) } };
@@ -144,14 +144,6 @@ export function createGameServer({ config, now = Date.now, rate = 1 }: GameServe
     "GET /me": async (g) => {
       await seen(g);
       return { status: 200, body: me(g) };
-    },
-    "POST /me/band": async (g, { band }) => {
-      if (!isBand(band)) return bad;
-      const changed = await writer.run(() => {
-        math.dropOpen(g.id);
-        return guardians.setBand(g.id, band);
-      });
-      return { status: 200, body: me(changed) };
     },
     "POST /me/nick": async (g, { nick }) => {
       if (!isNick(nick)) return bad;

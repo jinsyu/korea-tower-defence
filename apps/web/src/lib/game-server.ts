@@ -1,7 +1,7 @@
 // The game server API (apps/server). Screens call it with the device key; the server keeps everything else.
 import { clearDeviceKeyIfStill, readDeviceKey } from "@/lib/device-key";
 import { rtRoute } from "@/lib/rt-route";
-import { NICK_ADJECTIVES, NICK_NOUNS, type MathBand, type RecoveryCode, type Stat, type Tendency, type TowerType } from "@ktd/core";
+import { NICK_ADJECTIVES, NICK_NOUNS, type RecoveryCode, type Stat, type Tendency, type TowerType } from "@ktd/core";
 
 /** Nickname number from the server: adjective, noun and a 4-digit tag. */
 export type Nick = { adj: number; noun: number; tag: number };
@@ -13,7 +13,6 @@ export type ServerMe = {
   nick: Nick;
   name: string;
   tag: string;
-  band: MathBand;
   region: string;
   regionChange: RegionChange;
   towerType: TowerType;

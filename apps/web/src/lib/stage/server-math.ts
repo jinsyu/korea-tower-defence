@@ -2,10 +2,9 @@
 // A problem arrives without its answer; the answer and solution arrive with the marking (D33).
 import type { MathText } from "@ktd/core";
 import type { ServerMe } from "@/lib/game-server";
-import type { GradeBandId } from "@/lib/grade-bands";
 import type { Answered, PanelView } from "./math-panel";
 
-export type ServerProblem = { id: string; band: GradeBandId; type: string; expr: MathText; choices: MathText[] };
+export type ServerProblem = { id: string; type: string; expr: MathText; choices: MathText[] };
 
 type MathStatus = { pauseLeftMs: number; dailyRate: number };
 
@@ -32,7 +31,7 @@ const status = (r: MathStatus, now: number) => ({
   dailyRate: r.dailyRate,
 });
 
-export const loadingView = (band: GradeBandId): PanelView => ({ band, problem: LOADING, answered: null, pausedUntil: 0, daily: false });
+export const loadingView = (): PanelView => ({ problem: LOADING, answered: null, pausedUntil: 0, daily: false });
 
 /**
  * The panel for a problem reply. While the server makes me wait after many skips, the last problem stays on screen
@@ -40,8 +39,8 @@ export const loadingView = (band: GradeBandId): PanelView => ({ band, problem: L
  */
 export function problemView(prev: PanelView, r: ProblemReply, now: number): PanelView {
   if (!r.problem) return { ...prev, ...status(r, now), waitUntil: now + r.waitMs };
-  const { id, band, type, expr, choices } = r.problem;
-  return { band, id, problem: { type, expr, choices: choices as PanelView["problem"]["choices"] }, answered: null, waitUntil: 0, ...status(r, now) };
+  const { id, type, expr, choices } = r.problem;
+  return { id, problem: { type, expr, choices: choices as PanelView["problem"]["choices"] }, answered: null, waitUntil: 0, ...status(r, now) };
 }
 
 /** The note next to the points: why a right answer earned nothing. */

@@ -8,7 +8,6 @@ import {
   dailyRatePercent,
   FULL_POINTS_UNTIL,
   generateProblem,
-  type MathBand,
   type MathLevel,
   type MathText,
 } from "@ktd/core";
@@ -32,14 +31,14 @@ import type { Points24 } from "./points24";
 import type { Regions } from "./regions";
 
 /**
- * Seeds tried for an expression not among the recent ones. A level with fewer expressions than that (1~2학년 1·2단계:
+ * Seeds tried for an expression not among the recent ones. A level with fewer expressions than that (1·2단계:
  * 36) never finds one, so the tries must cover the whole level: then the pick is the expression seen longest ago and
  * a level of n expressions repeats every n problems, i.e. never within the last min(50, n − 1) (spec 결정 사항).
  * 500 random tries miss one of 36 expressions with a chance of about 3 in 100,000.
  */
 const FRESH_TRIES = 500;
 
-type OpenRow = { guardian_id: string; id: string; seed: number; band: MathBand; level: MathLevel; answer: number; sent_at: number };
+type OpenRow = { guardian_id: string; id: string; seed: number; level: MathLevel; answer: number; sent_at: number };
 type RecentRow = Recent & { key: string };
 
 type MathRow = GuardianRow & {
@@ -52,7 +51,7 @@ type MathRow = GuardianRow & {
 };
 
 /** What the screen sees of a problem: no answer, no values, no solution, no seed (D33). */
-export type ShownProblem = { id: string; band: MathBand; type: string; expr: MathText; choices: MathText[] };
+export type ShownProblem = { id: string; type: string; expr: MathText; choices: MathText[] };
 
 /** Header state the screen needs after a reload too. */
 export type MathStatus = { pauseLeftMs: number; dailyRate: number };
@@ -83,7 +82,7 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
     guardian: db.prepare<[string], MathRow>("SELECT * FROM guardians WHERE id = ?"),
     open: db.prepare<[string], OpenRow>("SELECT * FROM open_problems WHERE guardian_id = ?"),
     insertOpen: db.prepare(
-      "INSERT INTO open_problems (guardian_id, id, seed, band, level, answer, sent_at) VALUES (@guardian_id, @id, @seed, @band, @level, @answer, @sent_at)",
+      "INSERT INTO open_problems (guardian_id, id, seed, level, answer, sent_at) VALUES (@guardian_id, @id, @seed, @level, @answer, @sent_at)",
     ),
     closeOpen: db.prepare("DELETE FROM open_problems WHERE guardian_id = ?"),
     recent: db.prepare<[string], RecentRow>("SELECT key, outcome, ms, at FROM recent_answers WHERE guardian_id = ? ORDER BY at, rowid"),
@@ -105,8 +104,8 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
   });
 
   const show = (row: OpenRow): ShownProblem => {
-    const p = generateProblem(row.band, row.level, row.seed);
-    return { id: row.id, band: row.band, type: p.type, expr: p.expr, choices: p.choices };
+    const p = generateProblem(row.level, row.seed);
+    return { id: row.id, type: p.type, expr: p.expr, choices: p.choices };
   };
 
   function remember(guardianId: string, key: string, outcome: Outcome, ms: number, at: number) {
@@ -115,13 +114,13 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
   }
 
   /** A seed whose expression is not among the recent ones; small levels (36 expressions) take the one seen longest ago. */
-  function freshSeed(band: MathBand, level: MathLevel, recent: readonly RecentRow[]): { seed: number; answer: number } {
+  function freshSeed(level: MathLevel, recent: readonly RecentRow[]): { seed: number; answer: number } {
     const lastSeen = new Map<string, number>();
     recent.forEach((r, i) => lastSeen.set(r.key, i));
     let best: { seed: number; answer: number; seen: number } | undefined;
     for (let i = 0; i < FRESH_TRIES; i++) {
       const seed = randomInt(0, 2 ** 31);
-      const p = generateProblem(band, level, seed);
+      const p = generateProblem(level, seed);
       const seen = lastSeen.get(p.key) ?? -1;
       if (seen === -1) return { seed, answer: p.answer };
       if (!best || seen < best.seen) best = { seed, answer: p.answer, seen };
@@ -138,8 +137,8 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
     const recent = q.recent.all(guardianId);
     const waitMs = nextProblemAt(recent) - now;
     if (waitMs > 0) return { problem: null, waitMs, ...status(g, now) };
-    const { seed, answer } = freshSeed(g.band, g.math_step, recent);
-    const row: OpenRow = { guardian_id: guardianId, id: randomBytes(12).toString("base64url"), seed, band: g.band, level: g.math_step, answer, sent_at: now };
+    const { seed, answer } = freshSeed(g.math_step, recent);
+    const row: OpenRow = { guardian_id: guardianId, id: randomBytes(12).toString("base64url"), seed, level: g.math_step, answer, sent_at: now };
     q.insertOpen.run(row);
     return { problem: show(row), waitMs: 0, ...status(g, now) };
   }
@@ -157,7 +156,7 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
     if (!open) return { error: "no_problem" };
     q.closeOpen.run(guardianId);
 
-    const p = generateProblem(open.band, open.level, open.seed);
+    const p = generateProblem(open.level, open.seed);
     const correct = pick === open.answer;
     const ms = at - open.sent_at;
     const fast = isTooFast(open.sent_at, at);
@@ -224,12 +223,9 @@ export function createMath(db: Db, regions: Regions, points24: Points24, onCorre
     const open = openFor(guardianId, problemId);
     if (!open) return { error: "no_problem" };
     q.closeOpen.run(guardianId);
-    remember(guardianId, generateProblem(open.band, open.level, open.seed).key, "skip", at - open.sent_at, at);
+    remember(guardianId, generateProblem(open.level, open.seed).key, "skip", at - open.sent_at, at);
     return { waitMs: Math.max(0, nextProblemAt(q.recent.all(guardianId)) - at) };
   }
 
-  /** A band change starts the new band's first level with a new problem (D26). */
-  const dropOpen = (guardianId: string) => void q.closeOpen.run(guardianId);
-
-  return { problem, answer, skip, dropOpen };
+  return { problem, answer, skip };
 }

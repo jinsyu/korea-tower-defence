@@ -42,7 +42,7 @@ describe("the open problem (D32, D33)", () => {
     const { key } = await h.newGuardian();
     const { status, body } = await getProblem(key);
     expect(status).toBe(200);
-    expect(Object.keys(body.problem).sort()).toEqual(["band", "choices", "expr", "id", "type"]);
+    expect(Object.keys(body.problem).sort()).toEqual(["choices", "expr", "id", "type"]);
     expect(body.problem.choices).toHaveLength(4);
     const text = JSON.stringify(body);
     for (const field of ["answer", "solution", "values", "seed", "key"]) expect(text).not.toContain(`"${field}"`);
@@ -59,10 +59,12 @@ describe("the open problem (D32, D33)", () => {
   });
 
   it("does not repeat any of the last 50 expressions", async () => {
-    const { key } = await h.newGuardian({ band: "56" });
+    // Level 3 (2~9단 × 1~9: 72 expressions) is the only level with more than 50; right answers keep it there.
+    const { key } = await h.newGuardian();
+    setGuardian(key, { math_step: 3 });
     const dealt: string[] = [];
     for (let i = 0; i < 70; i++) {
-      await solve(key, i % 3 !== 0, 1500);
+      await solve(key, true, 1500);
       dealt.push((h.server.db.prepare("SELECT key FROM recent_answers ORDER BY at DESC, rowid DESC").get() as any).key);
       h.clock.add(2000);
     }
@@ -70,8 +72,8 @@ describe("the open problem (D32, D33)", () => {
     dealt.forEach((k, i) => expect(dealt.slice(Math.max(0, i - 50), i)).not.toContain(k));
   });
 
-  it("repeats a level of 36 expressions (1~2학년 1단계) no sooner than every 36 problems", async () => {
-    const { key } = await h.newGuardian({ band: "12" });
+  it("repeats a level of 36 expressions (1단계) no sooner than every 36 problems", async () => {
+    const { key } = await h.newGuardian();
     const dealt: string[] = [];
     for (let i = 0; i < 150; i++) {
       await solve(key, false, 4000); // wrong answers keep the guardian at level 1
@@ -88,25 +90,14 @@ describe("the open problem (D32, D33)", () => {
     expect(shortest).toBeGreaterThanOrEqual(36);
   });
 
-  it("still deals a problem when a level has fewer than 50 expressions (1~2학년 1단계: 36)", async () => {
-    const { key } = await h.newGuardian({ band: "12" });
+  it("still deals a problem when a level has fewer than 50 expressions (1단계: 36)", async () => {
+    const { key } = await h.newGuardian();
     for (let i = 0; i < 45; i++) {
       const { body } = await getProblem(key);
       expect(body.problem.id).toBeTruthy();
       await h.api("/math/skip", { method: "POST", key, body: { id: body.problem.id } });
       h.clock.add(61_000); // stay under the skip wait
     }
-  });
-
-  it("starts the new band's first level with a new problem when the band changes (D26)", async () => {
-    const { key } = await h.newGuardian({ band: "34" });
-    const before = (await getProblem(key)).body.problem;
-    setGuardian(key, { math_step: 3 });
-    await h.api("/me/band", { method: "POST", key, body: { band: "12" } });
-    const after = (await getProblem(key)).body.problem;
-    expect(after.id).not.toBe(before.id);
-    expect(after.band).toBe("12");
-    expect(guardianOf(key).math_step).toBe(1);
   });
 });
 

@@ -10,7 +10,6 @@ import { isDevDemo } from "@/components/use-my-guardian";
 import { PALETTE } from "@/lib/art/palette";
 import { callAsGuardian, OFFLINE_TEXT, type ServerMe } from "@/lib/game-server";
 import { oneAtATime } from "@/lib/one-at-a-time";
-import { GRADE_BANDS } from "@/lib/grade-bands";
 import { regionName } from "@/lib/region-names";
 import {
   meFromServer,
@@ -59,7 +58,6 @@ function Gauge({ pct, className = "h-1.5" }: { pct: number; className?: string }
 export function MeScreen() {
   const me = useSyncExternalStore(meStore.subscribe, meStore.get, meStore.get);
   const v = meScreenView(me);
-  const band = GRADE_BANDS.find((b) => b.id === me.band)?.label ?? "";
   const maxStat = Math.max(1, ...STAT_KEYS.map((k) => v.stats[k]));
   const [flash, setFlash] = useState(0);
 
@@ -173,7 +171,7 @@ export function MeScreen() {
               <TowerCanvas type={me.type} step={me.step} pal={me.pal} className="size-[clamp(112px,32vw,220px)]" />
               <div className="grid min-w-0 gap-1">
                 <small className="truncate text-xs font-black text-mut">
-                  {regionName(me.region)} 지킴이 · {band}
+                  {regionName(me.region)} 지킴이
                 </small>
                 <b className="truncate font-heading text-[clamp(20px,2.4vw,34px)] font-normal">
                   {me.nick} #{me.tag}

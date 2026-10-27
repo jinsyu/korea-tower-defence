@@ -24,7 +24,6 @@ import {
   type TowerType,
 } from "@ktd/core";
 import type { ServerMe } from "@/lib/game-server";
-import type { GradeBandId } from "@/lib/grade-bands";
 import { FAKE_ME } from "./fake-region";
 import type { BannerTone, TowerInput } from "./sim";
 
@@ -39,7 +38,6 @@ export type Stance = Tendency;
 export const STANCE_NAMES: Record<Stance, string> = { balanced: "골고루", ...STAT_NAMES };
 
 export type Me = Guardian & {
-  band: GradeBandId;
   /** Region code I defend. */
   region: string;
   stance: Stance;
@@ -86,7 +84,6 @@ export function meFromServer(s: ServerMe): Me {
     pal: s.color,
     pts24: s.points24h,
     joinedAt: 0,
-    band: s.band,
     region: s.region,
     stance: s.tendency,
     level: Number(s.level),

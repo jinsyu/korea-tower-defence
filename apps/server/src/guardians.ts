@@ -3,6 +3,8 @@ import {
   makeRecoveryCode,
   NICK_ADJECTIVES,
   NICK_NOUNS,
+  COLOR_COUNT,
+  openColorCount,
   splitStats,
   statPointsOf,
   TENDENCIES,
@@ -47,6 +49,7 @@ export function nickCandidates(): Nick[] {
 
 export const isBand = (v: unknown): v is MathBand => BANDS.includes(v as MathBand);
 export const isTowerType = (v: unknown): v is TowerType => TOWER_TYPES.includes(v as TowerType);
+export const isTendency = (v: unknown): v is Tendency => TENDENCIES.includes(v as Tendency);
 
 /** Device keys are 256-bit random values, so a plain SHA-256 is enough to keep only a hash (D4). */
 export const hashKey = (key: string): string => createHash("sha256").update(key).digest("base64url");
@@ -123,6 +126,23 @@ export function meView(g: GuardianRow, now: number, points24h: number): MeView {
   };
 }
 
+/** What the my-tower screen may change. Each given field replaces the saved one. */
+export type LookChange = { towerType?: TowerType; tendency?: Tendency; color?: number };
+
+/**
+ * Reads only towerType, tendency and colour; anything else in the body (level, points, ids) is ignored (D54).
+ * Null when nothing is given or a given field is out of range. Whether the colour is open is checked later
+ * against the saved level.
+ */
+export function toLookChange(body: Record<string, unknown>): LookChange | null {
+  const { towerType, tendency, color } = body;
+  if (towerType === undefined && tendency === undefined && color === undefined) return null;
+  if (towerType !== undefined && !isTowerType(towerType)) return null;
+  if (tendency !== undefined && !isTendency(tendency)) return null;
+  if (color !== undefined && !inRange(color, Number(COLOR_COUNT))) return null;
+  return { towerType, tendency, color } as LookChange;
+}
+
 export type NewGuardian = { band: MathBand; region: string; nick: Nick; towerType: TowerType };
 
 export type Guardians = ReturnType<typeof createGuardians>;
@@ -138,6 +158,7 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
       "SELECT g.* FROM guardian_keys k JOIN guardians g ON g.id = k.guardian_id WHERE k.key_hash = ?",
     ),
     byCode: db.prepare<[string], GuardianRow>("SELECT * FROM guardians WHERE code_hash = ?"),
+    keyCount: db.prepare<[string], { n: number }>("SELECT COUNT(*) AS n FROM guardian_keys WHERE guardian_id = ?"),
     codeTaken: db.prepare<[string], { one: number }>("SELECT 1 AS one FROM guardians WHERE code_hash = ?"),
     insert: db.prepare(
       `INSERT INTO guardians (id, code_hash, nick_adj, nick_noun, nick_tag, band, region, region_picked_at, tower_type, last_seen_on)
@@ -146,6 +167,7 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     insertKey: db.prepare("INSERT INTO guardian_keys (key_hash, guardian_id) VALUES (?, ?)"),
     setBand: db.prepare("UPDATE guardians SET band = ?, math_step = 1, right_streak = 0, wrong_streak = 0 WHERE id = ?"),
     setNick: db.prepare("UPDATE guardians SET nick_adj = ?, nick_noun = ?, nick_tag = ? WHERE id = ?"),
+    setLook: db.prepare("UPDATE guardians SET tower_type = ?, tendency = ?, color = ? WHERE id = ?"),
     setRegion: db.prepare("UPDATE guardians SET region = ?, region_changed_on = ? WHERE id = ?"),
     setCode: db.prepare("UPDATE guardians SET code_hash = ? WHERE id = ?"),
     touch: db.prepare("UPDATE guardians SET last_seen_on = ? WHERE id = ?"),
@@ -225,6 +247,17 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     return get(id);
   }
 
+  /**
+   * Tower type, tendency and colour change the picture only: the stats are re-split from the level on every read
+   * and their sum stays, so the power and the region sums do not move (D46, D47). A colour opens with the saved level.
+   */
+  function setLook(id: string, change: LookChange): { ok: true; guardian: GuardianRow } | { ok: false; reason: "color_locked" } {
+    const g = get(id);
+    if (change.color !== undefined && BigInt(change.color) >= openColorCount(BigInt(g.level))) return { ok: false, reason: "color_locked" };
+    q.setLook.run(change.towerType ?? g.tower_type, change.tendency ?? g.tendency, change.color ?? g.color, id);
+    return { ok: true, guardian: get(id) };
+  }
+
   /** My record moves with me; my power leaves the old region and joins the new one from the next wave (D7). */
   function changeRegion(
     id: string,
@@ -256,6 +289,18 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     regions.shiftPower(g.region, -powerOf(g), -1);
   }
 
+  /**
+   * "뒤로 가서 다시 만들기": the guardian this device made before goes, but only while its code was never used.
+   * Keys come only from making (one) and from restoring with the code (one more each), so a single key means the code
+   * has never been used. Returns the removed guardian's id.
+   */
+  function removeUnusedByKey(key: string): string | undefined {
+    const g = byKey(key);
+    if (!g || q.keyCount.get(g.id)!.n !== 1) return undefined;
+    remove(g.id);
+    return g.id;
+  }
+
   function purgeInactive(now: number): number {
     const gone = q.unseenSince.all(addDays(kstDate(now), -INACTIVE_DAYS));
     gone.forEach((g) => remove(g.id));
@@ -274,5 +319,5 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     return truth;
   }
 
-  return { regionTruth, byKey, codeExists, create, restore, touch, setBand, setNick, changeRegion, newCode, remove, purgeInactive };
+  return { regionTruth, byKey, codeExists, create, restore, touch, setBand, setNick, setLook, changeRegion, newCode, remove, removeUnusedByKey, purgeInactive };
 }

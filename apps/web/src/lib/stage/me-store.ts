@@ -5,12 +5,20 @@ import {
   boardTowers,
   type BoardTower,
   EVO_NAMES,
+  levelThreshold,
   lookOf,
   nextLook,
   MAT_NAMES,
+  openColorCount,
+  splitStats,
+  STATS,
+  statPointsOf,
+  TENDENCIES,
   TIER_NAMES,
+  upgradeCost,
   type Guardian,
   type NextLook,
+  type Stat,
   type StageFile,
   type Tendency,
   type TowerType,
@@ -20,14 +28,15 @@ import type { GradeBandId } from "@/lib/grade-bands";
 import { FAKE_ME } from "./fake-region";
 import type { BannerTone, TowerInput } from "./sim";
 
-export const STAT_KEYS = ["pow", "spd", "rng", "luck"] as const;
-export type StatKey = (typeof STAT_KEYS)[number];
-export const STAT_NAMES: Record<StatKey, string> = { pow: "힘", spd: "빠르기", rng: "멀리", luck: "행운" };
+// Stat and stance keys are the core names the server uses too (power, speed, ...), so both show the same stat.
+export const STAT_KEYS = STATS;
+export type StatKey = Stat;
+export const STAT_NAMES: Record<StatKey, string> = { power: "힘", speed: "빠르기", range: "멀리", luck: "행운" };
 
 /** How stat points are shared out: evenly, or one stat getting twice the others (spec "아이가 고르는 것"). */
-export const STANCES = ["bal", ...STAT_KEYS] as const;
-export type Stance = (typeof STANCES)[number];
-export const STANCE_NAMES: Record<Stance, string> = { bal: "골고루", ...STAT_NAMES };
+export const STANCES = TENDENCIES;
+export type Stance = Tendency;
+export const STANCE_NAMES: Record<Stance, string> = { balanced: "골고루", ...STAT_NAMES };
 
 export type Me = Guardian & {
   band: GradeBandId;
@@ -66,8 +75,6 @@ export function createMeStore(initial: Me): MeStore {
 /** The one store for this page session. Screens behind the guardian gate fill it from the server first. */
 export const meStore = createMeStore(FAKE_ME);
 
-const STANCE_OF: Record<Tendency, Stance> = { balanced: "bal", power: "pow", speed: "spd", range: "rng", luck: "luck" };
-
 /** My guardian from the server, in the store's shape. The id is my tower's public id in the region broadcast (T13). */
 export function meFromServer(s: ServerMe): Me {
   return {
@@ -81,17 +88,17 @@ export function meFromServer(s: ServerMe): Me {
     joinedAt: 0,
     band: s.band,
     region: s.region,
-    stance: STANCE_OF[s.tendency],
+    stance: s.tendency,
     level: Number(s.level),
     xp: Number(s.points),
     wallet: Number(s.wallet),
   };
 }
 
-/** Points needed in total to reach level n (fake curve from mockup B). */
-export const needXP = (n: number): number => (n <= 1 ? 0 : Math.ceil(50 * Math.pow(n, 1.6)));
-/** Points to go from step s to s + 1 (fake curve from mockup B). */
-export const upCost = (s: number): number => Math.ceil(10 * Math.pow(s, 1.1));
+/** Points needed in total to reach level n (the core table the server uses, exact integers). */
+export const needXP = (n: number): number => Number(levelThreshold(BigInt(n)));
+/** Points to go from step s to s + 1 (the core table the server uses). */
+export const upCost = (s: number): number => Number(upgradeCost(BigInt(s)));
 
 export type UpgradeKind = "up" | "look" | "mat" | "evo";
 export type UpgradeChange = { kind: UpgradeKind; text: string; tone: BannerTone; ms: number };
@@ -113,22 +120,12 @@ export function upgradeChange(from: number, to: number): UpgradeChange | null {
 export type Stats = Record<StatKey, number>;
 
 /**
- * One stat point per level after the first, shared by the stance: "bal" deals them out in turn, a one-stat stance
- * gives that stat 2 : 1 : 1 : 1 (mockup B; the real rule lands in core with T10-2). Changing the stance re-deals all.
+ * One stat point per level after the first, shared by the stance with core `splitStats` (the server's rule):
+ * "balanced" deals them out in turn, a one-stat stance gives that stat 2 : 1 : 1 : 1. Changing the stance re-deals all.
  */
 export function statsOf(level: number, stance: Stance): Stats {
-  const pts = Math.max(0, level - 1);
-  const out: Stats = { pow: 0, spd: 0, rng: 0, luck: 0 };
-  if (stance === "bal") {
-    for (let i = 0; i < pts; i++) out[STAT_KEYS[i % 4]!]++;
-    return out;
-  }
-  out[stance] = Math.round((pts * 2) / 5);
-  const rest = pts - out[stance];
-  STAT_KEYS.filter((k) => k !== stance).forEach((k, i) => {
-    out[k] = Math.floor(rest / 3) + (i < rest % 3 ? 1 : 0);
-  });
-  return out;
+  const split = splitStats(statPointsOf(BigInt(Math.max(1, level))), stance);
+  return { power: Number(split.power), speed: Number(split.speed), range: Number(split.range), luck: Number(split.luck) };
 }
 
 /** Level-up notice naming the stat that got the new point under my stance. */
@@ -140,7 +137,7 @@ export function levelUpText(level: number, stance: Stance): string {
 }
 
 /** Colours open: one at the start and one more every 10 levels, 12 in all. */
-export const openColors = (level: number): number => Math.min(12, 1 + Math.floor(level / 10));
+export const openColors = (level: number): number => Number(openColorCount(BigInt(level)));
 
 // Choices on the my-guardian screen. They change the picture only, never the power (spec D47).
 export const withType = (me: Me, type: TowerType): Me => ({ ...me, type });

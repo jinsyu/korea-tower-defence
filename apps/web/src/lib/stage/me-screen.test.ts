@@ -1,4 +1,4 @@
-import { lookKey, parseStageFile, TOWER_TYPES } from "@ktd/core";
+import { levelThreshold, lookKey, parseStageFile, splitStats, statPointsOf, TENDENCIES, TOWER_TYPES, upgradeCost } from "@ktd/core";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { FAKE_ME, fakeGuardians } from "./fake-region";
@@ -8,12 +8,14 @@ import {
   levelUpText,
   meBarView,
   meScreenView,
+  needXP,
   openColors,
   PREVIEW_STEPS,
   repRows,
   STANCES,
   STAT_KEYS,
   statsOf,
+  upCost,
   withPal,
   withStance,
   withType,
@@ -58,8 +60,8 @@ describe("stats and stance", () => {
   });
 
   it("deals points in turn for 골고루 and 2 : 1 : 1 : 1 for a one-stat stance", () => {
-    expect(statsOf(9, "bal")).toEqual({ pow: 2, spd: 2, rng: 2, luck: 2 });
-    expect(statsOf(11, "spd")).toEqual({ pow: 2, spd: 4, rng: 2, luck: 2 });
+    expect(statsOf(9, "balanced")).toEqual({ power: 2, speed: 2, range: 2, luck: 2 });
+    expect(statsOf(11, "speed")).toEqual({ power: 2, speed: 4, range: 2, luck: 2 });
   });
 
   it("names the stat that got the level-up point", () => {
@@ -73,7 +75,20 @@ describe("stats and stance", () => {
       }
     }
     expect(levelUpText(3, "luck")).toBe("레벨 3! 행운 +1");
-    expect(levelUpText(2, "bal")).toBe("레벨 2! 힘 +1");
+    expect(levelUpText(2, "balanced")).toBe("레벨 2! 힘 +1");
+  });
+});
+
+describe("the screen uses the core tables the server uses", () => {
+  it("level points, upgrade costs and stats are the exact core integers", () => {
+    for (const n of [1, 2, 3, 17, 99, 500, 4321]) {
+      expect(needXP(n)).toBe(Number(levelThreshold(BigInt(n))));
+      expect(upCost(n)).toBe(Number(upgradeCost(BigInt(n))));
+      for (const t of TENDENCIES) {
+        const core = splitStats(statPointsOf(BigInt(n)), t);
+        expect(statsOf(n, t)).toEqual({ power: Number(core.power), speed: Number(core.speed), range: Number(core.range), luck: Number(core.luck) });
+      }
+    }
   });
 });
 
@@ -115,7 +130,7 @@ describe("choices go through the one store (D53, plan memo)", () => {
   });
 
   it("type, stance and colour never change the level, step or points", () => {
-    const me = withPal(withStance(withType(FAKE_ME, "slow"), "rng"), 1);
+    const me = withPal(withStance(withType(FAKE_ME, "slow"), "range"), 1);
     expect(me).toMatchObject({ level: FAKE_ME.level, step: FAKE_ME.step, xp: FAKE_ME.xp, wallet: FAKE_ME.wallet });
   });
 });

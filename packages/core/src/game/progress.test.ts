@@ -22,6 +22,7 @@ import {
   dailyRatePercent,
   levelOf,
   levelThreshold,
+  openColorCount,
   splitStats,
   statPointsOf,
   towerPower,
@@ -161,6 +162,17 @@ describe("stat split by tendency (D46)", () => {
     }
     expect(splitStats(10n, "range")).toEqual({ power: 2n, speed: 2n, range: 4n, luck: 2n });
     expect(splitStats(10n, "balanced")).toEqual({ power: 3n, speed: 3n, range: 2n, luck: 2n });
+  });
+});
+
+describe("tower colours", () => {
+  it("opens one colour at the start and one more every 10 levels, 12 in all", () => {
+    expect(openColorCount(1n)).toBe(1n);
+    expect(openColorCount(9n)).toBe(1n);
+    expect(openColorCount(10n)).toBe(2n);
+    expect(openColorCount(23n)).toBe(3n);
+    expect(openColorCount(110n)).toBe(12n);
+    expect(openColorCount(5000n)).toBe(12n);
   });
 });
 

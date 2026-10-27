@@ -171,6 +171,16 @@ export function splitStats(points: bigint, tendency: Tendency): Stats {
   return stats;
 }
 
+/** Tower colours: one open at the start and one more every 10 levels, 12 in all (spec "아이가 고르는 것"). */
+export const COLOR_COUNT = BigInt(12);
+const LEVELS_PER_COLOR = BigInt(10);
+
+/** How many colours a level has opened; colours 0 .. count - 1 can be picked. */
+export function openColorCount(level: bigint): bigint {
+  const open = ONE + level / LEVELS_PER_COLOR;
+  return open < COLOR_COUNT ? open : COLOR_COUNT;
+}
+
 const statSum = (stats: Stats): bigint => STATS.reduce((sum, stat) => sum + stats[stat], ZERO);
 
 export type Tower = { stage: bigint; level: bigint; tendency: Tendency; towerType: TowerType };

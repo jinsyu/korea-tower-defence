@@ -439,7 +439,7 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
 
 ### T13-2: 내 타워 꾸미기 저장 — 성향·계열·색을 서버에 (2026-10-27 추가)
 
-- [ ] T13-2
+- [x] T13-2
 
 T12 리뷰에서 찾은 빈틈. T8 화면에서 성향·계열·색을 바꿔도 서버에 저장되지 않는다.
 
@@ -455,6 +455,7 @@ T12 리뷰에서 찾은 빈틈. T8 화면에서 성향·계열·색을 바꿔도
   pnpm test --project server --project core --project web && pnpm --filter web build
   ```
 - 완료 기준: 위 시험, 새로 고침·다른 기기 복구 뒤에도 고른 값이 남음
+- 더함(2026-10-27 사용자 결정): 복구 코드 화면에서 뒤로 가 지킴이를 새로 만들면, 같은 기기의 예전 지킴이(코드를 아직 한 번도 안 쓴 것)를 지운다. 지역 화력·지킴이 수에서도 빠진다. 시험: 다시 만든 뒤 지역 지킴이 수가 1, 화력이 새 지킴이 것만.
 
 ### T14: 부하 시험 본편 (실제 서버 코드) — DoD: D25, D55, D56, D57
 
@@ -684,7 +685,7 @@ spec 위험 "185개 맵 자동 생성", "OSM 도로 품질과 태그", "경계�
 | U3 | **GitHub 공개 저장소 만들기**(`korea-tower-defence`)와 원격 연결·push 허락 | T2 뒤 아무 때나 | 원격 push, Actions |
 | U4 | T1 부하 PoC가 실패하면 서버 배치 결정(별도 인스턴스 / MemoryMax 올림 / 기준 낮춤) | T1 결과 뒤 | T11 |
 | U5 | 별명 낱말 목록과 복구 코드 낱말 목록 사람 검토(외모·성별·지역 비하·놀림 말 없음) | T11 전 | T11(D3) |
-| U6 | **Vercel 프로젝트 이름 `korea-tower-defence` 확인**, GitHub 저장소를 Vercel 프로젝트로 연결, 환경 변수 넣기 | T20 | T20 |
+| U6 | ~~Vercel 프로젝트 이름 `korea-tower-defence` 확인~~(2026-10-27 완료: jinsyus-projects 팀, 루트 apps/web, Next.js), GitHub 저장소를 Vercel 프로젝트로 연결, 환경 변수 넣기 | T20 | T20 |
 | U7 | **jigsaw 포트 할당표에서 4000이 비었는지 확인**하고 `4000 · korea-tower-defence · korea-tower-defence-rt.gyosil.app` 등록 | T20 | T20 |
 | U8 | **`gyosil.app` DNS(Vercel)에 A 레코드** `korea-tower-defence-rt` → `13.124.90.119` | T20 | T20 |
 | U9 | **서버 Caddy**: 도메인 사이트 파일 설치, IP 사이트에 **`/ktd` 경로 추가**(공통 설정이라 다른 앱 영향 확인), 접근 로그 끔 | T20 | T20 |

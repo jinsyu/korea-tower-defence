@@ -8,14 +8,14 @@ import { BugTag, broadcastButton } from "@/components/broadcast";
 import { NickChoices, sameNick, useNickCandidates } from "@/components/nick-choices";
 import { useStartFlow } from "@/components/start-flow";
 import { saveDeviceKey } from "@/lib/device-key";
-import { callServer, OFFLINE_TEXT, type Created } from "@/lib/game-server";
+import { callServer, OFFLINE_TEXT, replaceKeyFor, type Created } from "@/lib/game-server";
 import { TOWER_TYPE_INFO } from "@/lib/tower-types";
 
 const labelClass = "min-w-0 truncate font-heading text-lg text-yellow";
 
 /** Step 3: nickname from the server's candidates and a tower type. "다음" makes the guardian on the server. */
 export function NickPicker() {
-  const { band, region, nickname, setNickname, towerType, setTowerType, issueCode } = useStartFlow();
+  const { band, region, nickname, setNickname, towerType, setTowerType, issueCode, issuedId } = useStartFlow();
   const router = useRouter();
   const { candidates, reroll, failed } = useNickCandidates();
   // After "다시 뽑기" the old pick is gone from the list, so the first new candidate is picked.
@@ -30,7 +30,7 @@ export function NickPicker() {
     setError(null);
     const res = await callServer<Created>("/guardians", {
       method: "POST",
-      body: { band, region: region.code, nick: picked, towerType },
+      body: { band, region: region.code, nick: picked, towerType, replaceKey: replaceKeyFor(issuedId > 0) },
     });
     setBusy(false);
     if (res.ok) {

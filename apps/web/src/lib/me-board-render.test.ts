@@ -1,8 +1,11 @@
 import { createElement, type ComponentType } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import BoardPage from "@/app/board/page";
 import { MeScreen } from "@/components/me/me-screen";
+
+// The my-guardian screen goes back to the first screen with the router when its key is gone; no app router here.
+vi.mock("next/navigation", () => ({ useRouter: () => ({ replace: () => undefined }) }));
 
 const render = (page: ComponentType) => renderToStaticMarkup(createElement(page));
 const count = (html: string, re: RegExp) => (html.match(re) ?? []).length;

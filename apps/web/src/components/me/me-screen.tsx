@@ -1,14 +1,19 @@
 "use client";
 
-import { formatBig, lookKey, TOWER_TYPES } from "@ktd/core";
+import { formatBig, lookKey, TOWER_TYPES, type Tendency, type TowerType } from "@ktd/core";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useState, useSyncExternalStore, type ReactNode } from "react";
 import { TowerCanvas } from "@/components/art/painted-canvas";
 import { pageQa, useDemoHooks } from "@/components/dev/use-demo-hooks";
+import { isDevDemo } from "@/components/use-my-guardian";
 import { PALETTE } from "@/lib/art/palette";
+import { callAsGuardian, OFFLINE_TEXT, type ServerMe } from "@/lib/game-server";
+import { oneAtATime } from "@/lib/one-at-a-time";
 import { GRADE_BANDS } from "@/lib/grade-bands";
 import { regionName } from "@/lib/region-names";
 import {
+  meFromServer,
   meScreenView,
   meStore,
   PREVIEW_STEPS,
@@ -59,6 +64,33 @@ export function MeScreen() {
   const [flash, setFlash] = useState(0);
 
   const set = (next: typeof me) => meStore.set(next);
+  const router = useRouter();
+  const [note, setNote] = useState<string | null>(null);
+
+  /**
+   * Saves a pick on the server and shows what it kept. One save at a time: a press while one is on its way is
+   * dropped, so the server's last change is the screen's last reply. `?demo=` screens change the picture only.
+   */
+  const [save] = useState(() =>
+    oneAtATime(async (change: { towerType?: TowerType; tendency?: Tendency; color?: number }, local: typeof me) => {
+      if (isDevDemo()) return set(local);
+      const res = await callAsGuardian<{ me: ServerMe }>("/me/look", { method: "POST", body: change });
+      // The key is gone (deleted on another device, cleaned up): back to the first screen like the other screens (D6).
+      if (res.status === 401) return router.replace("/");
+      if (res.ok) {
+        set(meFromServer(res.data.me));
+        setNote(null);
+        return;
+      }
+      setNote(
+        res.status === 0
+          ? OFFLINE_TEXT
+          : res.data.error === "color_locked"
+            ? "아직 열리지 않은 색이에요."
+            : "바꾸지 못했어요. 다시 해 주세요.",
+      );
+    }),
+  );
 
   useDemoHooks(
     {
@@ -128,6 +160,12 @@ export function MeScreen() {
         </Link>
       </div>
 
+      {note && (
+        <p role="status" className="bg-navy2 px-3 py-2 text-sm font-black text-[#FF8A80]">
+          {note}
+        </p>
+      )}
+
       <div className="grid min-w-0 grid-cols-1 gap-2 wide:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="grid min-w-0 content-start gap-2">
           <Card>
@@ -181,7 +219,7 @@ export function MeScreen() {
                   type="button"
                   data-stance={s}
                   aria-pressed={me.stance === s}
-                  onClick={() => set(withStance(meStore.get(), s))}
+                  onClick={() => void save({ tendency: s }, withStance(meStore.get(), s))}
                   className={`min-h-11 min-w-11 bg-navy2 px-3 text-[15px] font-black whitespace-nowrap aria-pressed:bg-yellow aria-pressed:text-navy ${pressable}`}
                 >
                   {STANCE_NAMES[s]}
@@ -198,7 +236,7 @@ export function MeScreen() {
                   type="button"
                   data-type={t}
                   aria-pressed={me.type === t}
-                  onClick={() => set(withType(meStore.get(), t))}
+                  onClick={() => void save({ towerType: t }, withType(meStore.get(), t))}
                   className={`grid min-h-22 min-w-0 content-center justify-items-center gap-0.5 border-t-5 border-navy3 bg-navy2 p-1 aria-pressed:border-yellow aria-pressed:bg-navy3 ${pressable}`}
                 >
                   <TowerCanvas type={t} step={me.step} pal={me.pal} badge={false} className="size-12" />
@@ -220,7 +258,7 @@ export function MeScreen() {
                     disabled={locked}
                     aria-pressed={me.pal === i}
                     aria-label={locked ? `${p.n} (레벨 ${i * 10}에 열림)` : p.n}
-                    onClick={() => set(withPal(meStore.get(), i))}
+                    onClick={() => void save({ color: i }, withPal(meStore.get(), i))}
                     style={{ background: p.c }}
                     className={`relative min-h-11 min-w-0 border-3 border-[rgb(6_16_42/0.6)] aria-pressed:border-white aria-pressed:outline-3 aria-pressed:outline-red disabled:opacity-30 ${pressable}`}
                   >

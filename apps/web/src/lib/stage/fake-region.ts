@@ -57,7 +57,7 @@ export const FAKE_ME: Me = {
   joinedAt: 3000,
   band: "12",
   region: FAKE_REGION_CODE,
-  stance: "bal",
+  stance: "balanced",
   level: 23,
   xp: 7800,
   wallet: 580,

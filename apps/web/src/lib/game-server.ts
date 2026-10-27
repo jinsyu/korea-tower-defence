@@ -1,7 +1,7 @@
 // The game server API (apps/server). Screens call it with the device key; the server keeps everything else.
 import { clearDeviceKeyIfStill, readDeviceKey } from "@/lib/device-key";
 import { rtRoute } from "@/lib/rt-route";
-import { NICK_ADJECTIVES, NICK_NOUNS, type MathBand, type RecoveryCode, type Tendency, type TowerType } from "@ktd/core";
+import { NICK_ADJECTIVES, NICK_NOUNS, type MathBand, type RecoveryCode, type Stat, type Tendency, type TowerType } from "@ktd/core";
 
 /** Nickname number from the server: adjective, noun and a 4-digit tag. */
 export type Nick = { adj: number; noun: number; tag: number };
@@ -24,6 +24,8 @@ export type ServerMe = {
   wallet: string;
   stage: string;
   power: string;
+  /** Stat points split by my tendency on the server (core names). Screens re-split with core `statsOf` instead, so demos and the server agree. */
+  stats: Record<Stat, string>;
   /** My tower's public id in the region broadcast. */
   rid: string;
   /** Points I earned in the last 24 hours. */
@@ -75,6 +77,13 @@ export async function callAsGuardian<T>(path: string, opts: { method?: string; b
   if (res.status === 401) clearDeviceKeyIfStill(key);
   return res;
 }
+
+/**
+ * The key to send as `replaceKey` when making a guardian: only when this start flow already made one (the child went
+ * back from the code screen). The server then drops that guardian if its code was never used. A guardian this device
+ * had from before the flow is never sent, so starting over another day keeps it.
+ */
+export const replaceKeyFor = (madeInThisFlow: boolean): string | undefined => (madeInThisFlow ? (readDeviceKey() ?? undefined) : undefined);
 
 export const NO_GUARDIAN_TEXT = "이 기기에는 지킴이가 없어요. 처음 하기나 복구 코드로 이어 하기를 먼저 해 주세요.";
 

@@ -1,8 +1,9 @@
+import { STATS } from "@ktd/core";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readDeviceKey, saveDeviceKey } from "./device-key";
-import { callAsGuardian, dayLabel, nickName, nickTag, type ServerMe } from "./game-server";
+import { callAsGuardian, dayLabel, nickName, nickTag, replaceKeyFor, type ServerMe } from "./game-server";
 import { regionName } from "./region-names";
-import { meFromServer } from "./stage/me-store";
+import { meFromServer, meScreenView } from "./stage/me-store";
 
 afterEach(() => {
   vi.unstubAllEnvs();
@@ -49,6 +50,16 @@ describe("requests as my guardian (D6)", () => {
   });
 });
 
+describe("making a guardian again from the code screen", () => {
+  it("sends the stored key only when this start flow already made a guardian", () => {
+    fakeBrowser();
+    expect(replaceKeyFor(true)).toBeUndefined();
+    saveDeviceKey("made-a-minute-ago");
+    expect(replaceKeyFor(true)).toBe("made-a-minute-ago");
+    expect(replaceKeyFor(false)).toBeUndefined();
+  });
+});
+
 describe("game server client", () => {
   it("shows nickname numbers as list words and a 4-digit tag", () => {
     expect(nickName({ adj: 0, noun: 0, tag: 427 })).toBe("씩씩한 수달");
@@ -79,6 +90,7 @@ describe("my guardian from the server", () => {
       wallet: "7",
       stage: "12",
       power: "20",
+      stats: { power: "1", speed: "1", range: "1", luck: "2" },
       rid: "AbCdEfGhIjKl",
       points24h: 36,
     };
@@ -97,5 +109,31 @@ describe("my guardian from the server", () => {
       wallet: 7,
       step: 12,
     });
+  });
+
+  it("shows the same stats under the same names as the server for every one-stat tendency", () => {
+    const base = {
+      nick: { adj: 0, noun: 0, tag: 427 },
+      name: "씩씩한 수달",
+      tag: "0427",
+      band: "34",
+      region: "11010",
+      regionChange: { allowed: true, nextOn: null },
+      towerType: "splash",
+      color: 0,
+      level: "11",
+      points: "900",
+      wallet: "0",
+      stage: "3",
+      power: "12",
+      rid: "AbCdEfGhIjKl",
+      points24h: 0,
+    } as const;
+    for (const focus of STATS) {
+      // What the server sends at level 11 (apps/server app.test.ts "names the stats like the core tendencies").
+      const stats = { power: "2", speed: "2", range: "2", luck: "2", [focus]: "4" };
+      const shown = meScreenView(meFromServer({ ...base, tendency: focus, stats })).stats;
+      expect(Object.fromEntries(Object.entries(shown).map(([k, v]) => [k, String(v)]))).toEqual(stats);
+    }
   });
 });

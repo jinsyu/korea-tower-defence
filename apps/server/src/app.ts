@@ -4,7 +4,7 @@ import { Server as SocketServer } from "socket.io";
 import type { Config } from "./config";
 import { HOUR_MS, kstDate } from "./dates";
 import { createWriter, openDb, type Db } from "./db";
-import { createGuardians, isBand, isNick, isTowerType, meView, nickCandidates } from "./guardians";
+import { createGuardians, isBand, isNick, isTowerType, meView, nickCandidates, toLookChange } from "./guardians";
 import { createAddressLimits } from "./limits";
 import { isRoute, createLive, type Live } from "./live";
 import { createMath } from "./math";
@@ -106,15 +106,21 @@ export function createGameServer({ config, now = Date.now, rate = 1 }: GameServe
     "GET /nicks": async () => ({ status: 200, body: { candidates: nickCandidates() } }),
 
     // Only the listed fields are read; points, stage, power or waves sent by a screen are ignored (D54).
+    // replaceKey: this device's key of the guardian it made before, when the child went back from the code screen.
     "POST /guardians": async (req, body) => {
-      const { band, region, nick, towerType } = body;
+      const { band, region, nick, towerType, replaceKey } = body;
       if (!isBand(band) || typeof region !== "string" || !REGION_CODES.has(region) || !isNick(nick) || !isTowerType(towerType)) {
         return bad;
       }
       const address = clientAddress(req);
       if (!limits.canCreate(address)) return { status: 429, body: { error: "too_many_guardians" } };
       limits.created(address);
-      const made = await writer.run(() => guardians.create({ band, region, nick, towerType }, now()));
+      const replaced = typeof replaceKey === "string" && KEY_SHAPE.test(replaceKey) ? replaceKey : null;
+      const { made, removed } = await writer.run(() => ({
+        removed: replaced ? guardians.removeUnusedByKey(replaced) : undefined,
+        made: guardians.create({ band, region, nick, towerType }, now()),
+      }));
+      if (removed) io.in(`g:${removed}`).disconnectSockets(true);
       return { status: 201, body: { key: made.key, code: made.code, ...me(made.guardian) } };
     },
 
@@ -150,6 +156,14 @@ export function createGameServer({ config, now = Date.now, rate = 1 }: GameServe
     "POST /me/nick": async (g, { nick }) => {
       if (!isNick(nick)) return bad;
       return { status: 200, body: me(await writer.run(() => guardians.setNick(g.id, nick))) };
+    },
+    // Type, tendency and colour from the my-tower screen. A level sent along is ignored: the colour lock uses the saved one.
+    "POST /me/look": async (g, body) => {
+      const change = toLookChange(body);
+      if (!change) return bad;
+      const out = await writer.run(() => guardians.setLook(g.id, change));
+      if (!out.ok) return { status: 409, body: { error: out.reason } };
+      return { status: 200, body: me(out.guardian) };
     },
     "POST /me/region": async (g, { region }) => {
       if (typeof region !== "string" || !REGION_CODES.has(region)) return bad;

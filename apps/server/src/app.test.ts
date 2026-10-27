@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any -- test responses and rows are read loosely */
-import { formatRecoveryCode, WAVE_MS } from "@ktd/core";
+import { formatRecoveryCode, STATS, WAVE_MS } from "@ktd/core";
 import Database from "better-sqlite3";
 import { readFileSync, readdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -299,6 +299,122 @@ describe("region change (D7)", () => {
     const after = (await h.api("/me", { key })).body.me;
     expect(after).toMatchObject({ ...me, region: "32540", regionChange: after.regionChange });
     expect(after).toMatchObject({ points: "300", wallet: "4" });
+  });
+});
+
+describe("making a guardian again from the code screen (T13-2)", () => {
+  it("drops this device's previous guardian whose code was never used, from the region count and power too", async () => {
+    const old = await h.newGuardian({ region: "11010" });
+    await h.server.flushPower();
+    expect(regionRow("11010")).toMatchObject({ guardian_count: 1, next_power: "10" });
+    const again = await h.newGuardian({ region: "11010", replaceKey: old.key });
+    await h.server.flushPower();
+    expect(guardianCount()).toBe(1);
+    expect(regionRow("11010")).toMatchObject({ guardian_count: 1, next_power: again.me.power });
+    expect(again.me.power).toBe("10");
+    expect((await h.api("/me", { key: old.key })).status).toBe(401);
+    expect((await h.api("/restore", { method: "POST", body: old.code })).status).toBe(401);
+  });
+
+  it("works across regions: the old region loses the guardian, the new one gains it", async () => {
+    const old = await h.newGuardian({ region: "11010" });
+    await h.server.flushPower();
+    await h.newGuardian({ region: "32540", replaceKey: old.key });
+    await h.server.flushPower();
+    expect(regionRow("11010")).toMatchObject({ guardian_count: 0, next_power: "0" });
+    expect(regionRow("32540")).toMatchObject({ guardian_count: 1, next_power: "10" });
+  });
+
+  it("keeps a guardian whose code has been used on another device", async () => {
+    const old = await h.newGuardian();
+    await h.api("/restore", { method: "POST", body: old.code, ip: "10.0.0.2" });
+    await h.newGuardian({ replaceKey: old.key });
+    await h.server.flushPower();
+    expect(guardianCount()).toBe(2);
+    expect(regionRow("11010").guardian_count).toBe(2);
+    expect((await h.api("/me", { key: old.key })).status).toBe(200);
+  });
+
+  it("ignores unknown or made-up keys and still makes the new guardian", async () => {
+    const other = await h.newGuardian();
+    for (const replaceKey of ["q".repeat(43), "short", 12, null]) await h.newGuardian({ replaceKey });
+    expect(guardianCount()).toBe(5);
+    expect((await h.api("/me", { key: other.key })).status).toBe(200);
+  });
+});
+
+describe("my tower looks: type, tendency, colour (T13-2)", () => {
+  const look = (key: string, body: unknown) => h.api("/me/look", { method: "POST", key, body });
+  const setLevel = (key: string, level: number) =>
+    h.server.db
+      .prepare("UPDATE guardians SET level = ? WHERE id = (SELECT guardian_id FROM guardian_keys WHERE key_hash = ?)")
+      .run(level, hashKey(key));
+
+  it("saves the picks so a reload and another device after restore show them", async () => {
+    const a = await h.newGuardian();
+    setLevel(a.key, 23);
+    const res = await look(a.key, { towerType: "slow", tendency: "range", color: 2 });
+    expect(res.status).toBe(200);
+    expect(res.body.me).toMatchObject({ towerType: "slow", tendency: "range", color: 2 });
+    expect((await h.api("/me", { key: a.key })).body.me).toMatchObject({ towerType: "slow", tendency: "range", color: 2 });
+    const other = await h.api("/restore", { method: "POST", body: a.code, ip: "10.0.0.2" });
+    expect(other.body.me).toMatchObject({ towerType: "slow", tendency: "range", color: 2 });
+    // One field at a time leaves the others as they are.
+    expect((await look(a.key, { color: 0 })).body.me).toMatchObject({ towerType: "slow", tendency: "range", color: 0 });
+  });
+
+  it("re-splits the stats when the tendency changes; the stat sum and power stay (D46, D47)", async () => {
+    const { key } = await h.newGuardian();
+    setLevel(key, 11);
+    await h.server.flushPower();
+    const before = (await h.api("/me", { key })).body.me;
+    const after = (await look(key, { tendency: "speed", towerType: "rapid" })).body.me;
+    expect(before.stats).toEqual({ power: "3", speed: "3", range: "2", luck: "2" });
+    expect(after.stats).toEqual({ power: "2", speed: "4", range: "2", luck: "2" });
+    expect(after.power).toBe(before.power);
+    await h.server.flushPower();
+    expect(regionRow("11010").next_power).toBe("10");
+  });
+
+  it("names the stats like the core tendencies, so a one-stat tendency raises the stat of the same name", async () => {
+    const { key } = await h.newGuardian();
+    setLevel(key, 11);
+    for (const stat of STATS) {
+      const { stats } = (await look(key, { tendency: stat })).body.me;
+      expect(Object.keys(stats).sort()).toEqual([...STATS].sort());
+      expect(stats[stat]).toBe("4");
+    }
+  });
+
+  it("refuses a colour that is not open yet, whatever level the screen sends", async () => {
+    const { key } = await h.newGuardian();
+    setLevel(key, 9);
+    expect(await look(key, { color: 1, level: 50 })).toEqual({ status: 409, body: { error: "color_locked" } });
+    expect((await h.api("/me", { key })).body.me).toMatchObject({ level: "9", color: 0 });
+    setLevel(key, 10);
+    expect((await look(key, { color: 1, level: 1 })).body.me).toMatchObject({ level: "10", color: 1 });
+    expect((await look(key, { color: 2 })).status).toBe(409);
+  });
+
+  it("refuses values out of range and a body with nothing to change", async () => {
+    const { key } = await h.newGuardian();
+    setLevel(key, 500);
+    for (const body of [{}, { color: 12 }, { color: -1 }, { color: 1.5 }, { color: "1" }, { tendency: "pow" }, { towerType: "laser" }, { level: 3 }]) {
+      expect((await look(key, body)).status).toBe(400);
+    }
+    // A bad field refuses the whole change.
+    expect((await look(key, { towerType: "slow", color: 99 })).status).toBe(400);
+    expect((await h.api("/me", { key })).body.me).toMatchObject({ towerType: "splash", tendency: "balanced", color: 0 });
+  });
+
+  it("changes only the guardian of the key, and refuses made-up keys", async () => {
+    const a = await h.newGuardian();
+    const b = await h.newGuardian({ nick: { adj: 3, noun: 3, tag: 3 } });
+    await look(a.key, { id: "b", rid: b.me.rid, towerType: "slow" });
+    expect((await h.api("/me", { key: b.key })).body.me.towerType).toBe("splash");
+    expect((await h.api("/me", { key: a.key })).body.me.towerType).toBe("slow");
+    expect((await look("z".repeat(43), { towerType: "rapid" })).status).toBe(401);
+    expect((await look("", { towerType: "rapid" })).status).toBe(401);
   });
 });
 

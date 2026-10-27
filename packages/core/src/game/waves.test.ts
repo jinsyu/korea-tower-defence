@@ -1,6 +1,6 @@
-import ts from "typescript";
 import { describe, expect, it, vi } from "vitest";
 import { createRng, type Rng } from "../math/random.ts";
+import { findFloatUse } from "./integer-check.ts";
 import {
   H0,
   WAVE_MS,
@@ -308,66 +308,11 @@ describe("integers only (D17 code check)", () => {
 
   it("waves.ts uses numbers only for health table positions", () => {
     const file = expect.getState().testPath!.replace(/waves\.test\.ts$/, "waves.ts");
-    const program = ts.createProgram([file], {
-      target: ts.ScriptTarget.ES2022,
-      strict: true,
-      noEmit: true,
-      allowImportingTsExtensions: true,
-    });
-    const checker = program.getTypeChecker();
-    const source = program.getSourceFile(file)!;
-    const found: string[] = [];
-    const isBigInt = (node: ts.Expression) => (checker.getTypeAtLocation(node).flags & ts.TypeFlags.BigIntLike) !== 0;
-    const FLOAT_NAMES = new Set(["Math", "parseFloat", "toFixed", "toPrecision", "Infinity", "NaN", "EPSILON"]);
-    const FLOAT_OPS = new Set([
-      ts.SyntaxKind.SlashToken,
-      ts.SyntaxKind.SlashEqualsToken,
-      ts.SyntaxKind.AsteriskAsteriskToken,
-      ts.SyntaxKind.AsteriskAsteriskEqualsToken,
-    ]);
-    // Arithmetic and assignment operators (comparisons are fine on any type).
-    const ARITHMETIC = new Set([
-      ts.SyntaxKind.PlusToken,
-      ts.SyntaxKind.MinusToken,
-      ts.SyntaxKind.AsteriskToken,
-      ts.SyntaxKind.PercentToken,
-      ts.SyntaxKind.LessThanLessThanToken,
-      ts.SyntaxKind.GreaterThanGreaterThanToken,
-      ts.SyntaxKind.GreaterThanGreaterThanGreaterThanToken,
-      ts.SyntaxKind.AmpersandToken,
-      ts.SyntaxKind.BarToken,
-      ts.SyntaxKind.CaretToken,
-      ts.SyntaxKind.PlusEqualsToken,
-      ts.SyntaxKind.MinusEqualsToken,
-      ts.SyntaxKind.AsteriskEqualsToken,
-      ts.SyntaxKind.PercentEqualsToken,
-      ...FLOAT_OPS,
-    ]);
-    // Functions that work on table positions (safe integers that never hold a game value).
-    const INDEX_FUNCTIONS = new Set(["healthAt", "maxBlockableWave"]);
-    const isNumber = (node: ts.Expression) => (checker.getTypeAtLocation(node).flags & ts.TypeFlags.NumberLike) !== 0;
-    const isNumberCall = (node: ts.Node): node is ts.CallExpression =>
-      ts.isCallExpression(node) && ts.isIdentifier(node.expression) && node.expression.text === "Number";
-    const isHealthAtArg = (node: ts.Node) =>
-      ts.isCallExpression(node.parent) && ts.isIdentifier(node.parent.expression) && node.parent.expression.text === "healthAt";
-
-    const visit = (node: ts.Node, fn: string | undefined) => {
-      const at = () => `${node.getText(source)} (line ${source.getLineAndCharacterOfPosition(node.getStart()).line + 1})`;
-      const inIndexFn = fn !== undefined && INDEX_FUNCTIONS.has(fn);
-      if (ts.isNumericLiteral(node) && /[.eE]/.test(node.getText(source))) found.push(at());
-      if (ts.isIdentifier(node) && FLOAT_NAMES.has(node.text)) found.push(at());
-      if (ts.isBinaryExpression(node) && FLOAT_OPS.has(node.operatorToken.kind) && !(isBigInt(node.left) && isBigInt(node.right)))
-        found.push(at());
-      if (ts.isBinaryExpression(node) && ARITHMETIC.has(node.operatorToken.kind) && (isNumber(node.left) || isNumber(node.right)) && !inIndexFn)
-        found.push(at());
-      if ((ts.isPrefixUnaryExpression(node) || ts.isPostfixUnaryExpression(node)) && isNumber(node.operand) && !inIndexFn)
-        found.push(at());
+    const found = findFloatUse(file, {
+      indexFunctions: new Set(["healthAt", "maxBlockableWave"]),
       // BigInt -> number only as a table position: straight into healthAt.
-      if (isNumberCall(node) && !isHealthAtArg(node)) found.push(at());
-      const name = ts.isFunctionDeclaration(node) ? node.name?.text : fn;
-      ts.forEachChild(node, (child) => visit(child, name));
-    };
-    visit(source, undefined);
+      numberInto: new Set(["healthAt"]),
+    });
     expect(found).toEqual([]);
   });
 });

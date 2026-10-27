@@ -11,7 +11,7 @@ const GROWTH_DEN = BigInt(100);
 /** Wave length T in seconds. One wave per minute, 1,440 a day. */
 export const WAVE_SECONDS = BigInt(60);
 export const WAVE_MS = WAVE_SECONDS * BigInt(1000);
-/** Enemy health of wave 1, H(1). Provisional until the pace PoC (T10-2). */
+/** Enemy health of wave 1, H(1). A new guardian alone exactly blocks it (B(1) × 60 = H0, spec "진행 속도 봇 결과"). */
 export const H0 = BigInt(600);
 /** A breach sends the region this many waves back (Q26). */
 export const BREACH_STEP = FIVE;

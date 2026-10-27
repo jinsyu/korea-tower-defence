@@ -12,6 +12,7 @@ import {
   type SimPoint,
   type SimResult,
 } from "@/lib/dev/wave-sim";
+import { PaceTables } from "./pace-tables";
 
 type Choice = { mantissa: number; exponent: number; days: number; startWave: number };
 
@@ -198,6 +199,7 @@ export function WaveSim() {
         <Graph points={outcome.result.points} />
         <h2 className="m-0 font-heading text-base font-normal text-yellow">처음 {FIRST_WAVES}웨이브 (한 웨이브씩 계산)</h2>
         <FirstWaves result={outcome.result} />
+        <PaceTables />
       </div>
     </main>
   );

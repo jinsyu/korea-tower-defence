@@ -7,3 +7,5 @@ export * from "./names";
 export * from "./stage";
 export * from "./format";
 export * from "./game/waves";
+export * from "./game/progress";
+export * from "./game/pace-bot";

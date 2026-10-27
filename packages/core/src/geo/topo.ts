@@ -42,6 +42,7 @@ export function decodeTopology(topo: Topology<unknown>) {
   };
 
   return {
+    arcs,
     polygons(geom: TopoGeometry<unknown>): Polygon[] {
       return geom.type === "Polygon" ? [geom.arcs.map(ring)] : geom.arcs.map((p) => p.map(ring));
     },

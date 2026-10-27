@@ -196,7 +196,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T6: 방어 화면 1 — 방어판 캔버스(평창군 시험 판) — DoD: D16(시험 판), D22(가짜), D63(시험 판), D64, D72, D79(단위)
 
-- [ ] T6
+- [x] T6
 - 기준 시안: `option-b.html?screen=stage`, 데모 `boss`, `breach`, `record`, `barrage`, `rep`
 
 - `packages/core/stage/schema.ts`

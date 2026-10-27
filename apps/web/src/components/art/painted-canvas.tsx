@@ -36,7 +36,7 @@ function subscribeFont(cb: () => void) {
   };
 }
 
-function useArtFont(): FontState {
+export function useArtFont(): FontState {
   return useSyncExternalStore(
     subscribeFont,
     () => fontState,

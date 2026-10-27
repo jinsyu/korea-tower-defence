@@ -656,3 +656,19 @@ export function drawTowerBody(g: G, type: TowerType, step: number, pal: number, 
   B.top?.(g);
   g.restore();
 }
+
+const headCache = new Map<string, [number, number, number]>();
+
+/** Turret head centre and radius in the 96-unit grid, after size and height (where shots leave the tower). */
+export function headUnit(type: TowerType, step: number): [number, number, number] {
+  const L = lookOf(step);
+  const sz = sizeOf(step);
+  const key = `${type}${L.evo}|${Math.round(sz * 100)}`;
+  const hit = headCache.get(key);
+  if (hit) return hit;
+  const hm = L.evo >= 3 ? 1.15 : 1;
+  const [hx, hy, r] = BODY[type]((y) => 22 - (22 - y) * hm, L).head;
+  const h: [number, number, number] = [hx * sz, 30 + (hy - 30) * sz, r * sz];
+  headCache.set(key, h);
+  return h;
+}

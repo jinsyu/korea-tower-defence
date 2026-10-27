@@ -145,7 +145,7 @@ spec 위험 요소 "한 대 서버의 부하 한계 (PoC 필요)". 이 결과로
 
 ### T4: 타워·풍선 그림과 에셋 견본, 별명·타워 계열 화면 — DoD: D50, D51, D78
 
-- [ ] T4
+- [x] T4
 - 기준 시안: `option-b.html?screen=assets`(데모 `assets-sil`, `assets-gray`, `assets-blur`), `?screen=nick`, `asset-research.md`
 
 - `packages/core/looks.ts`: 단계 → (진화, 재질, 등급, 몸체, 포신, 장식, ★, 위치 점), 크기 비율, 다음 문턱(nextLook)

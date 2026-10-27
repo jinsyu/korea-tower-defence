@@ -77,8 +77,8 @@ export function RegionPicker() {
     setSido(null);
     setSelected(null);
   };
-  const pick = (code: string) => {
-    setRegion(code);
+  const pick = (r: RegionShape) => {
+    setRegion({ code: r.code, name: r.name });
     router.push("/start/nick");
   };
 
@@ -120,7 +120,7 @@ export function RegionPicker() {
           <RegionCard
             region={selectedRegion}
             stats={stats.get(selectedRegion.code)!}
-            onPick={() => pick(selectedRegion.code)}
+            onPick={() => pick(selectedRegion)}
             onClose={() => {
               setSelected(null);
               if (openerRef.current?.isConnected) openerRef.current.focus();

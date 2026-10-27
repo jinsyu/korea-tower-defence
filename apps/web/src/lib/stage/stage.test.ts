@@ -120,8 +120,9 @@ const towersFor = (n: number): TowerInput[] => [
   { spot: stage.mySpot, type: "rapid", step: 47, pal: 0, me: true },
 ];
 
-function makeSim(opts: { reduced?: boolean; wide?: boolean; wave?: number; perSec?: number } = {}) {
+function makeSim(opts: { reduced?: boolean; wide?: boolean; wave?: number; perSec?: number; external?: boolean } = {}) {
   const sim = new StageSim(stage, {
+    external: opts.external,
     region: { wave: opts.wave ?? 1284, best: 1290, perSec: opts.perSec ?? 38 },
     rng: seededRng(7),
     reduced: !!opts.reduced,
@@ -197,6 +198,40 @@ describe("live board", () => {
       }
       expect(Math.min(...counts)).toBeGreaterThanOrEqual(3);
     }
+  });
+});
+
+describe("following the server (D23)", () => {
+  const banners = (events: StageEvent[]) => events.flatMap((e) => (e.kind === "banner" ? [e.text] : []));
+
+  it("never ends a wave on its own clock; the server's wave and result come in through follow", () => {
+    const { sim, events, run } = makeSim({ external: true, wave: 12 });
+    run(75);
+    expect(sim.region.wave).toBe(12);
+    sim.follow({ wave: 13, best: 1290, breach: true, ended: true });
+    expect(sim.region.wave).toBe(13);
+    expect(sim.breach).toBe(true);
+    expect(banners(events)).toContain("웨이브 12 방어!");
+    // The breach wave ends: the reset banner shows even when its balloons never reached the base, and the server's
+    // wave 8 comes next (the sim does not go back by itself).
+    run(2);
+    sim.follow({ wave: 8, best: 1290, breach: false, ended: false });
+    expect(banners(events)).toContain("방어선 재정비 — 웨이브 8부터 다시");
+    expect(sim.region.wave).toBe(8);
+    expect(sim.breach).toBe(false);
+    run(20);
+    expect(sim.region.wave).toBe(8);
+  });
+
+  it("jumps to the server's wave when it fell behind, and changes nothing when the wave is the same", () => {
+    const { sim, events, run } = makeSim({ external: true, wave: 12 });
+    run(1);
+    const before = events.length;
+    sim.follow({ wave: 12, best: 1290, breach: false, ended: null });
+    expect(events.length).toBe(before);
+    sim.follow({ wave: 40, best: 1290, breach: false, ended: null });
+    expect(sim.region.wave).toBe(40);
+    expect(sim.enemies.every((e) => e.wave >= 40)).toBe(true);
   });
 });
 

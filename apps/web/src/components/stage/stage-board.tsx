@@ -55,12 +55,14 @@ type Props = {
   region: RegionState;
   /** Connection lost: the board stands still under a notice (D58). */
   offline: boolean;
+  /** Waves end when the game server says so (sim.follow), not on the board's own clock (T13). */
+  external: boolean;
   onEvent: (e: StageEvent) => void;
   onReady: (api: BoardApi | null) => void;
 };
 
 /** The defence board: canvas, name labels, banner, tip and credit. The board is watched, never touched. */
-export function StageBoard({ stage, towers, region, offline, onEvent, onReady }: Props) {
+export function StageBoard({ stage, towers, region, offline, external, onEvent, onReady }: Props) {
   const mapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
@@ -75,6 +77,7 @@ export function StageBoard({ stage, towers, region, offline, onEvent, onReady }:
   const emit = useEffectEvent((e: StageEvent) => onEvent(e));
   const ready = useEffectEvent((api: BoardApi | null) => onReady(api));
   const initialRegion = useEffectEvent(() => region);
+  const isExternal = useEffectEvent(() => external);
   const initialTowers = useEffectEvent(() => towers);
   const displayFont = useEffectEvent(() => font);
   const isOffline = useEffectEvent(() => offline);
@@ -102,6 +105,7 @@ export function StageBoard({ stage, towers, region, offline, onEvent, onReady }:
 
     const sim = new StageSim(stage, {
       region: initialRegion(),
+      external: isExternal(),
       rng: seededRng(Date.now()),
       reduced: reduceMq.matches,
       wide: isWide(window.innerWidth, window.innerHeight),

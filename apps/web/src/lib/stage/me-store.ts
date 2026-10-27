@@ -3,6 +3,7 @@
 // "같은 상태에서 그리기"). From T11 the store starts from the server's guardian; growth moves with the server in T12.
 import {
   boardTowers,
+  type BoardTower,
   EVO_NAMES,
   lookOf,
   nextLook,
@@ -67,16 +68,16 @@ export const meStore = createMeStore(FAKE_ME);
 
 const STANCE_OF: Record<Tendency, Stance> = { balanced: "bal", power: "pow", speed: "spd", range: "rng", luck: "luck" };
 
-/** My guardian from the server, in the store's shape. Points in the last 24 hours arrive with the board (T12–T13). */
+/** My guardian from the server, in the store's shape. The id is my tower's public id in the region broadcast (T13). */
 export function meFromServer(s: ServerMe): Me {
   return {
-    id: "me",
+    id: s.rid,
     nick: s.name,
     tag: s.tag,
     type: s.towerType,
     step: Number(s.stage),
     pal: s.color,
-    pts24: 0,
+    pts24: s.points24h,
     joinedAt: 0,
     band: s.band,
     region: s.region,
@@ -166,7 +167,12 @@ export function gainPoints(me: Me, points: number): Gain {
 
 /** Towers for the board: top N representatives on their spots, mine on my spot unless I am one of them. */
 export function boardTowerInputs(stage: StageFile, guardians: readonly Guardian[], me: Me): TowerInput[] {
-  return boardTowers(guardians, me, stage.repSpots.length).map(({ guardian: g, me: mine, ...at }) => ({
+  return placedTowerInputs(stage, boardTowers(guardians, me, stage.repSpots.length));
+}
+
+/** Board towers for representatives already picked (the server's list) or picked here (demos). */
+export function placedTowerInputs(stage: StageFile, placed: readonly BoardTower[]): TowerInput[] {
+  return placed.map(({ guardian: g, me: mine, ...at }) => ({
     spot: at.spot === "rep" ? stage.repSpots[at.index]! : stage.mySpot,
     type: g.type,
     step: g.step,
@@ -190,7 +196,11 @@ export type RepRow = {
 
 /** "오늘의 대표 지킴이": the representatives in order, then my row when I am not one of them. */
 export function repRows(guardians: readonly Guardian[], me: Me, repSpotCount: number): RepRow[] {
-  return boardTowers(guardians, me, repSpotCount).map((t) => ({
+  return placedRepRows(boardTowers(guardians, me, repSpotCount));
+}
+
+export function placedRepRows(placed: readonly BoardTower[]): RepRow[] {
+  return placed.map((t) => ({
     id: t.guardian.id,
     rank: t.spot === "rep" ? t.index + 1 : null,
     nick: t.guardian.nick,

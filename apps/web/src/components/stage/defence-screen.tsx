@@ -1,6 +1,6 @@
 "use client";
 
-import { formatBig, parseStageFile, type StageFile } from "@ktd/core";
+import { boardTowers, formatBig, parseStageFile, placeTowers, type Guardian, type StageFile } from "@ktd/core";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { broadcastButton } from "@/components/broadcast";
@@ -18,7 +18,18 @@ import {
   type PanelState,
   type PanelView,
 } from "@/lib/stage/math-panel";
-import { boardTowerInputs, gainPoints, levelUpText, meBarView, meFromServer, meStore, repRows, upgradeChange } from "@/lib/stage/me-store";
+import { gainPoints, levelUpText, meBarView, meFromServer, meStore, placedRepRows, placedTowerInputs, upgradeChange } from "@/lib/stage/me-store";
+import {
+  hudOf,
+  isStale,
+  newsSince,
+  rememberSeen,
+  repGuardians,
+  waitingHud,
+  waveLine,
+  type RegionMessage,
+  type RepsMessage,
+} from "@/lib/stage/region-live";
 import { wrongTip, type AnswerReply } from "@/lib/stage/server-math";
 import { regionName } from "@/lib/region-names";
 import { fmt, type StageEvent } from "@/lib/stage/sim";
@@ -28,6 +39,7 @@ import { NewsSheet, type AwayNews } from "./news-sheet";
 import { RepList } from "./rep-list";
 import { StageBoard, type BoardApi } from "./stage-board";
 import { useDevHooks, type ScreenActions } from "./use-dev-hooks";
+import { useRegionLive } from "./use-region-live";
 import { useServerMath } from "./use-server-math";
 
 /** Test stage until the real 185 stages arrive (T15–T16). */
@@ -78,34 +90,51 @@ function useLater() {
 
 const reducedMotion = () => window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
+/** Read-out lines kept for the wave log (screen readers and the E2E watch every one as it is added). */
+const WAVE_LOG_KEPT = 6;
+
 /**
  * Defence screen: scoreboard, board, problem panel, level bar, representative list and ticker.
- * Problems, points and my tower come from the game server (T12); the region stays fake until T13.
- * The dev-only `?demo=` screens deal and mark problems here without a server.
+ * Problems, points and my tower come from the game server (T12); my region's waves, representatives and numbers come
+ * from its room (T13). The dev-only `?demo=` screens deal problems and play the region here without a server.
  */
 export function DefenceScreen() {
   const { stage, failed, retry } = useStageFile();
   const router = useRouter();
   // Fixed for the screen's life: the gate shows this screen only after it knows (client side) which it is.
   const [demo] = useState(isDevDemo);
-  // My region's name; its numbers stay fake until the region server (T13).
-  const [region, setRegion] = useState<RegionHud>(() => ({ ...FAKE_REGION, name: regionName(meStore.get().region) }));
+  const [region, setRegion] = useState<RegionHud>(() => {
+    const name = regionName(meStore.get().region);
+    return isDevDemo() ? { ...FAKE_REGION, name } : waitingHud(name);
+  });
   const [tick, setTick] = useState(0);
   // My guardian: one store read by the board, the representative list and the level bar.
   const me = useSyncExternalStore(meStore.subscribe, meStore.get, meStore.get);
   // Mockup B opens on a 1~2 band problem part way through a streak.
   const [panel, setPanel] = useState<PanelState>(() => ({ ...newPanel(meStore.get().band, 0, 2), streak: 3 }));
   const [clock, setClock] = useState(0);
-  const [offline, setOfflineState] = useState(false);
+  // Demos switch the connection notice by hand; the server's room switches it for real.
+  const [demoOffline, setOfflineState] = useState(false);
   const [news, setNews] = useState<AwayNews | null>(null);
   const [levelBump, setLevelBump] = useState(0);
-  const guardians = useMemo(() => fakeGuardians(FAKE_REGION.guardians), []);
+  const guardians = useMemo(() => (demo ? fakeGuardians(FAKE_REGION.guardians) : []), [demo]);
+  // The server's representatives in its order (picked every 10 minutes, D21).
+  const [serverReps, setServerReps] = useState<Guardian[]>([]);
+  const [waveLog, setWaveLog] = useState<{ key: number; text: string }[]>([]);
   const apiRef = useRef<BoardApi | null>(null);
   const eventsRef = useRef<StageEvent[]>([]);
+  /** The newest region message applied, and the first wave this visit saw (older ended waves are not read out). */
+  const shownRef = useRef<RegionMessage | null>(null);
+  const firstStartRef = useRef<number | null>(null);
   const later = useLater();
 
-  const towers = useMemo(() => (stage ? boardTowerInputs(stage, guardians, me) : []), [stage, guardians, me]);
-  const reps = useMemo(() => (stage ? repRows(guardians, me, stage.repSpots.length) : []), [stage, guardians, me]);
+  const placed = useMemo(() => {
+    if (!stage) return [];
+    const n = stage.repSpots.length;
+    return demo ? boardTowers(guardians, me, n) : placeTowers(serverReps, me, n);
+  }, [stage, demo, guardians, serverReps, me]);
+  const towers = useMemo(() => (stage ? placedTowerInputs(stage, placed) : []), [stage, placed]);
+  const reps = useMemo(() => placedRepRows(placed), [placed]);
   const topRep = reps[0]?.rank === 1 ? reps[0] : undefined;
 
   // The first problem counts as shown from the first painted frame in the browser (until then answers are too fast).
@@ -114,30 +143,32 @@ export function DefenceScreen() {
     return () => cancelAnimationFrame(id);
   }, []);
 
-  // Next problem after a correct answer; held while offline so the same problem stays (D58).
-  useEffect(() => {
-    const at = panel.advanceAt;
-    const wait = advanceDelay(panel, offline, Date.now());
-    if (wait === null) return;
-    const id = setTimeout(() => setPanel((p) => (p.advanceAt === at ? nextProblem(p, Date.now()) : p)), wait);
-    return () => clearTimeout(id);
-  }, [panel, offline]);
-
-  const setOffline = useCallback((next: boolean) => {
-    setOfflineState(next);
-    if (!next) setPanel((p) => resumeAfterReconnect(p, Date.now()));
-  }, []);
-
-
-  const onEvent = useCallback((e: StageEvent) => {
-    if (process.env.NODE_ENV !== "production") eventsRef.current.push(e);
-    if (e.kind === "region") {
-      setRegion((r) => ({ ...r, wave: e.wave, best: e.best }));
-      setTick((n) => n + 1);
+  /** A region message: scoreboard, read-out of every resolved wave, the board, and "지난 소식" on the first one (D23, D24). */
+  const onRegion = useCallback((m: RegionMessage) => {
+    const prev = shownRef.current;
+    if (m.code !== meStore.get().region || isStale(m, prev)) return;
+    shownRef.current = m;
+    if (!prev) {
+      firstStartRef.current = m.waveStartMs;
+      const away = newsSince(m);
+      if (away) setNews(away);
+    }
+    rememberSeen(m);
+    const from = Math.max(firstStartRef.current ?? m.waveStartMs, prev ? prev.waveStartMs : -Infinity);
+    const ended = m.ended.filter((e) => e.startMs >= from);
+    if (ended.length > 0) {
+      setWaveLog((log) => [...log, ...ended.map((e) => ({ key: e.startMs, text: waveLine(e) }))].slice(-WAVE_LOG_KEPT));
+    }
+    setRegion(hudOf(m, regionName(m.code)));
+    if (!prev || prev.wave !== m.wave) setTick((n) => n + 1);
+    const api = apiRef.current;
+    if (api) {
+      api.sim.setPerSec(m.perSec);
+      api.sim.follow({ wave: m.wave, best: m.best, breach: !m.held, ended: ended.at(-1)?.held ?? null });
     }
   }, []);
-  const onReady = useCallback((api: BoardApi | null) => {
-    apiRef.current = api;
+  const onReps = useCallback((m: RepsMessage) => {
+    if (m.code === meStore.get().region) setServerReps(repGuardians(m.list));
   }, []);
 
   /** Points to my guardian; steps and levels rise on their own, with the matching effect (D48). */
@@ -161,7 +192,7 @@ export function DefenceScreen() {
     (reply: AnswerReply) => {
       const api = apiRef.current;
       const before = meStore.get();
-      const after = { ...meFromServer(reply.me), pts24: before.pts24 };
+      const after = meFromServer(reply.me);
       if (reply.correct) api?.sim.meFire(reply.points);
       const change = upgradeChange(before.step, after.step);
       if (change && api) {
@@ -180,8 +211,46 @@ export function DefenceScreen() {
     },
     [later],
   );
-  const onUnreachable = useCallback(() => apiRef.current?.tip(OFFLINE_TEXT, 2600), []);
   const onGone = useCallback(() => router.replace("/"), [router]);
+  const link = useRegionLive({ enabled: !demo, onRegion, onReps, onGone });
+  const offline = demoOffline || link.offline;
+
+  // Next problem after a correct answer; held while offline so the same problem stays (D58).
+  useEffect(() => {
+    const at = panel.advanceAt;
+    const wait = advanceDelay(panel, offline, Date.now());
+    if (wait === null) return;
+    const id = setTimeout(() => setPanel((p) => (p.advanceAt === at ? nextProblem(p, Date.now()) : p)), wait);
+    return () => clearTimeout(id);
+  }, [panel, offline]);
+
+  const setOffline = useCallback((next: boolean) => {
+    setOfflineState(next);
+    if (!next) setPanel((p) => resumeAfterReconnect(p, Date.now()));
+  }, []);
+
+
+  const onEvent = useCallback(
+    (e: StageEvent) => {
+      if (process.env.NODE_ENV !== "production") eventsRef.current.push(e);
+      // Demos play the region on the board's own clock; with the server the scoreboard follows the server only.
+      if (demo && e.kind === "region") {
+        setRegion((r) => ({ ...r, wave: e.wave, best: e.best }));
+        setTick((n) => n + 1);
+      }
+    },
+    [demo],
+  );
+  const onReady = useCallback((api: BoardApi | null) => {
+    apiRef.current = api;
+    const m = shownRef.current;
+    if (api && m) {
+      api.sim.setPerSec(m.perSec);
+      api.sim.follow({ wave: m.wave, best: m.best, breach: !m.held, ended: null });
+    }
+  }, []);
+
+  const onUnreachable = useCallback(() => apiRef.current?.tip(OFFLINE_TEXT, 2600), []);
   const server = useServerMath({ enabled: !demo, band: me.band, offline, onAnswered: onServerAnswer, onUnreachable, onGone });
   const view: PanelView = demo ? panel : server.view;
 
@@ -243,7 +312,7 @@ export function DefenceScreen() {
   }
 
   const hot = region.perSec > 100;
-  const ticker = `${region.name} 생중계 · 지금 ${fmt(region.online)}명이 함께 지키는 중 · 최고 웨이브 ${fmt(region.best)} (전국 ${region.rank}위)${
+  const ticker = `${region.name} 생중계 · 지금 ${fmt(region.online)}명이 함께 지키는 중 · 최고 웨이브 ${fmt(region.best)}${region.rank > 0 ? ` (전국 ${region.rank}위)` : ""}${
     topRep ? ` · 대표 지킴이 1위 ${topRep.nick} #${topRep.tag} 타워 ${topRep.step}단계` : ""
   } · 문제를 맞힐 때마다 우리 지역 화력이 세져요`;
 
@@ -257,7 +326,14 @@ export function DefenceScreen() {
         <span className="flex min-w-0 flex-auto items-center bg-white pr-3.5 pl-2 text-[17px] text-navy [clip-path:polygon(0_0,100%_0,calc(100%-8px)_100%,0_100%)]">
           <span className="truncate">{region.name}</span>
         </span>
-        <HudSeg label="W" value={fmt(region.wave)} tick={tick} className="bg-yellow text-navy" aria="지역 웨이브" />
+        <HudSeg
+          label="W"
+          value={region.wave > 0 ? fmt(region.wave) : "–"}
+          tick={tick}
+          className="bg-yellow text-navy"
+          aria="지역 웨이브"
+          slot="hud-wave"
+        />
         <HudSeg label="최고" value={fmt(region.best)} tick={tick} aria="최고 웨이브" />
         <HudSeg label="접속" value={fmt(region.online)} aria="지금 접속" className="hidden wide-or-landscape:flex" />
       </div>
@@ -266,7 +342,7 @@ export function DefenceScreen() {
           화력 <b className="text-yellow">{formatBig(region.power)}</b>
         </span>
         <span>
-          적 <b className="text-white">{formatBig(region.power * 0.97)}</b>
+          적 <b className="text-white">{formatBig(region.enemy)}</b>
         </span>
         <span>
           지금 <b className="text-white">{fmt(region.online)}</b>명
@@ -282,8 +358,9 @@ export function DefenceScreen() {
         <StageBoard
           stage={stage}
           towers={towers}
-          region={{ wave: region.wave, best: region.best, perSec: region.perSec }}
+          region={{ wave: Math.max(1, region.wave), best: region.best, perSec: region.perSec }}
           offline={offline}
+          external={!demo}
           onEvent={onEvent}
           onReady={onReady}
         />
@@ -309,6 +386,13 @@ export function DefenceScreen() {
           </div>
         </div>
       </div>
+      <div role="log" aria-live="polite" aria-label="웨이브 결과" data-slot="wave-log" className="sr-only">
+        {waveLog.map((l) => (
+          <p key={l.key} data-start={l.key}>
+            {l.text}
+          </p>
+        ))}
+      </div>
       {news && <NewsSheet news={news} step={me.step} onClose={() => setNews(null)} />}
     </div>
   );
@@ -319,16 +403,18 @@ function HudSeg({
   value,
   aria,
   tick,
+  slot,
   className = "",
 }: {
   label: string;
   value: string;
   aria: string;
   tick?: number;
+  slot?: string;
   className?: string;
 }) {
   return (
-    <span aria-label={`${aria} ${value}`} className={`flex flex-none items-center gap-1 px-2 whitespace-nowrap ${className}`}>
+    <span data-slot={slot} data-value={value} aria-label={`${aria} ${value}`} className={`flex flex-none items-center gap-1 px-2 whitespace-nowrap ${className}`}>
       <small aria-hidden="true" className="font-sans text-[11px] font-black opacity-85">
         {label}
       </small>

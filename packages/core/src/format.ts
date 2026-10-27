@@ -33,9 +33,9 @@ function scientific(b: bigint): string {
   return `${mantissa} × 10${sup}`;
 }
 
-export function formatBig(n: number): string {
+export function formatBig(n: number | bigint): string {
   // Every double from 2⁵³ up is a whole number, so BigInt(floor) is exact.
-  const b = BigInt(Math.floor(n));
+  const b = typeof n === "bigint" ? n : BigInt(Math.floor(n));
   if (b >= PAST_GYEONG) return scientific(b);
   const unit = UNITS.find(([u]) => b >= u);
   return unit ? `${inUnit(b, unit[0])}${unit[1]}` : withCommas(String(b));

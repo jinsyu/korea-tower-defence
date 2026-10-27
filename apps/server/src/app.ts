@@ -6,15 +6,20 @@ import { HOUR_MS, kstDate } from "./dates";
 import { createWriter, openDb, type Db } from "./db";
 import { createGuardians, isBand, isNick, isTowerType, meView, nickCandidates } from "./guardians";
 import { createAddressLimits } from "./limits";
+import { isRoute, createLive, type Live } from "./live";
 import { createMath } from "./math";
-import { createRegions, REGION_CODES } from "./regions";
+import { createPoints24 } from "./points24";
+import { createRegions, POWER_POOL_MS, REGION_CODES } from "./regions";
 
 export type GameServer = {
   httpServer: HttpServer;
   io: SocketServer;
   db: Db;
-  /** Hourly upkeep: 365-day clean-up, 30-day power log trim, expired address entries. Also runs at start. */
+  live: Live;
+  /** Hourly upkeep: 365-day clean-up, log and point trims, region power check, expired address entries. Also at start. */
   maintenance: () => Promise<void>;
+  /** Apply the pooled region power changes now (runs every 10 s of server time). */
+  flushPower: () => Promise<void>;
   close: () => Promise<void>;
 };
 
@@ -22,7 +27,13 @@ export type GameServerOptions = {
   config: Config;
   /** Server clock (epoch ms). Tests swap it to cross the 24-hour, 30-day and 365-day lines. */
   now?: () => number;
+  /** Server ms per real ms of `now` (the E2E fast clock); timers wait that much less. */
+  rate?: number;
 };
+
+/** Engine.io heartbeat: a dead connection shows as closed within 2.5 s on the screen (D58: 3 s). */
+const PING_INTERVAL_MS = 1000;
+const PING_TIMEOUT_MS = 1500;
 
 type Reply = { status: number; body?: unknown };
 type Json = Record<string, unknown>;
@@ -64,12 +75,13 @@ function toCode(body: Json): RecoveryCode | null {
   return isRecoveryCode(code) ? code : null;
 }
 
-export function createGameServer({ config, now = Date.now }: GameServerOptions): GameServer {
+export function createGameServer({ config, now = Date.now, rate = 1 }: GameServerOptions): GameServer {
   const db = openDb(config.dbPath);
   const writer = createWriter(db, config.flushMs);
   const regions = createRegions(db);
+  const points24 = createPoints24(db);
   const guardians = createGuardians(db, regions, config.serverSecret);
-  const math = createMath(db, regions);
+  const math = createMath(db, regions, points24, (code) => live.countCorrect(code));
   const limits = createAddressLimits(config.ipHmacKey, now);
 
   const authed = (req: IncomingMessage): Guardian | undefined => {
@@ -82,7 +94,7 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
     if (g.last_seen_on !== kstDate(now())) await writer.run(() => guardians.touch(g.id, now()));
   };
 
-  const me = (g: Guardian) => ({ me: meView(g, now()) });
+  const me = (g: Guardian) => ({ me: meView(g, now(), points24.of(g.id, now())) });
 
   const locked = (msLeft: number): Reply => ({ status: 429, body: { error: "locked", minutesLeft: Math.ceil(msLeft / 60000) } });
   const wrongCode = (address: string): Reply => {
@@ -143,8 +155,7 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
       if (typeof region !== "string" || !REGION_CODES.has(region)) return bad;
       const out = await writer.run(() => guardians.changeRegion(g.id, region, now()));
       if (!out.ok) return { status: 409, body: out.reason === "locked" ? { error: "region_locked", nextOn: out.nextOn } : { error: "same_region" } };
-      io.in(`g:${g.id}`).socketsLeave(`region:${g.region}`);
-      io.in(`g:${g.id}`).socketsJoin(`region:${region}`);
+      live.move(g.id, region);
       return { status: 200, body: me(out.guardian) };
     },
     "POST /me/code": async (g) => ({ status: 200, body: { code: await writer.run(() => guardians.newCode(g.id)) } }),
@@ -163,7 +174,7 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
       return refusedOr(await writer.run(() => math.skip(g.id, id, at)));
     },
     "DELETE /me": async (g) => {
-      await writer.run(() => guardians.remove(g.id, now()));
+      await writer.run(() => guardians.remove(g.id));
       io.in(`g:${g.id}`).disconnectSockets(true);
       return { status: 204 };
     },
@@ -191,7 +202,8 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
 
   async function handle(req: IncomingMessage): Promise<{ reply: Reply; cors: boolean }> {
     const path = new URL(req.url ?? "/", "http://server").pathname;
-    if (req.method === "GET" && path === "/health") return { reply: { status: 200, body: { ok: true } }, cors: false };
+    // Numbers only: connections per route (spec 위험 요소 "학교망 차단": how many go through the paid proxy).
+    if (req.method === "GET" && path === "/health") return { reply: { status: 200, body: { ok: true, ...live.health() } }, cors: false };
     const routeKey = `${req.method === "OPTIONS" ? req.headers["access-control-request-method"] : req.method} ${path}`;
     const open = routes[routeKey];
     const mine = myRoutes[routeKey];
@@ -223,6 +235,8 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
   });
 
   const io = new SocketServer(httpServer, {
+    pingInterval: PING_INTERVAL_MS,
+    pingTimeout: PING_TIMEOUT_MS,
     cors: { origin: config.allowedOrigin },
     allowRequest: (req, done) => done(null, req.headers.origin === config.allowedOrigin),
   });
@@ -232,35 +246,57 @@ export function createGameServer({ config, now = Date.now }: GameServerOptions):
     const key: unknown = socket.handshake.auth?.key;
     const g = typeof key === "string" && KEY_SHAPE.test(key) ? guardians.byKey(key) : undefined;
     if (!g) return next(new Error("no_guardian"));
-    socket.data.me = meView(g, now());
-    socket.join([`g:${g.id}`, `region:${g.region}`]);
+    socket.data.me = meView(g, now(), points24.of(g.id, now()));
+    socket.data.gid = g.id;
+    socket.data.region = g.region;
+    // Which way the screen came (domain / IP path / web proxy), for the /health counts only.
+    const route: unknown = socket.handshake.auth?.route;
+    socket.data.route = isRoute(route) ? route : "domain";
+    void socket.join(`g:${g.id}`);
     seen(g).then(
       () => next(),
       () => next(new Error("server")),
     );
   });
-  io.on("connection", (socket) => socket.emit("me", socket.data.me));
+  const live = createLive({ io, writer, regions, points24, clock: { now, rate } });
+  io.on("connection", (socket) => {
+    socket.emit("me", socket.data.me);
+    live.join(socket);
+  });
 
+  // After a restart the pooled power changes of the old process are gone: the region check puts them right (D57).
   const maintenance = () =>
     writer
       .run(() => {
         guardians.purgeInactive(now());
         regions.trimLog(now());
+        points24.trim(now());
+        regions.reconcile(guardians.regionTruth(), now());
       })
       .then(() => limits.sweep());
 
+  const flushPower = () => writer.run(() => regions.applyPool(now()));
+  const pooling = setInterval(() => {
+    flushPower().catch((err: unknown) => console.error("power flush failed:", err instanceof Error ? err.message : err));
+  }, POWER_POOL_MS / rate);
+  pooling.unref();
+
   const upkeep = setInterval(() => {
     maintenance().catch((err: unknown) => console.error("maintenance failed:", err instanceof Error ? err.message : err));
-  }, HOUR_MS);
+  }, HOUR_MS / rate);
   upkeep.unref();
 
   const close = async () => {
     clearInterval(upkeep);
+    clearInterval(pooling);
+    live.close();
     limits.close();
     await new Promise<void>((resolve, reject) => io.close((err) => (err ? reject(err) : resolve())));
+    // A clean stop keeps the pooled changes too.
+    void writer.run(() => regions.applyPool(now()));
     writer.flush();
     db.close();
   };
 
-  return { httpServer, io, db, maintenance, close };
+  return { httpServer, io, db, live, maintenance, flushPower, close };
 }

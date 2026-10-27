@@ -18,13 +18,23 @@ export type Harness = {
   clock: { now: () => number; set: (ms: number) => void; add: (ms: number) => void };
   api: (path: string, opts?: ApiOptions) => Promise<{ status: number; body: any }>;
   socket: (key: string | undefined, origin?: string) => Promise<{ socket: Socket; me?: any; error?: string }>;
+  /** A socket that records every region and reps message from the start. */
+  watch: (key: string, route?: string) => Promise<Watcher>;
   newGuardian: (fields?: Record<string, unknown>, ip?: string) => Promise<any>;
   stop: () => Promise<void>;
 };
 
 export type ApiOptions = { method?: string; body?: unknown; key?: string; ip?: string; origin?: string | null };
 
-export async function startServer(): Promise<Harness> {
+export type Watcher = {
+  socket: Socket;
+  regions: any[];
+  reps: any[];
+  /** Resolves with the next message of that kind (or one already waiting). */
+  next: (kind: "region" | "reps") => Promise<any>;
+};
+
+export async function startServer({ rate = 1 }: { rate?: number } = {}): Promise<Harness> {
   const dir = mkdtempSync(join(tmpdir(), "ktd-server-test-"));
   const dbPath = join(dir, "test.db");
   let t = START;
@@ -32,6 +42,7 @@ export async function startServer(): Promise<Harness> {
   const server = createGameServer({
     config: { allowedOrigin: ORIGIN, serverSecret: "test-secret-0123456789abcdefghijklmnop", ipHmacKey: "test-ip-key", dbPath, flushMs: 5 },
     now: clock.now,
+    rate,
   });
   await new Promise<void>((resolve) => server.httpServer.listen(0, "127.0.0.1", resolve));
   const { port } = server.httpServer.address() as AddressInfo;
@@ -56,6 +67,33 @@ export async function startServer(): Promise<Harness> {
       s.on("connect_error", (err) => resolve({ socket: s, error: err.message }));
     });
 
+  const watch: Harness["watch"] = (key, route) =>
+    new Promise((resolve, reject) => {
+      const s = connect(baseUrl, { transports: ["websocket"], auth: { key, route }, extraHeaders: { origin: ORIGIN }, reconnection: false });
+      sockets.push(s);
+      const got = { region: [] as any[], reps: [] as any[] };
+      const read = { region: 0, reps: 0 };
+      const waiting: Partial<Record<"region" | "reps", (m: any) => void>> = {};
+      for (const kind of ["region", "reps"] as const) {
+        s.on(kind, (m) => {
+          got[kind].push(m);
+          const w = waiting[kind];
+          if (w) {
+            delete waiting[kind];
+            read[kind] += 1;
+            w(m);
+          }
+        });
+      }
+      const next = (kind: "region" | "reps") =>
+        new Promise<any>((res) => {
+          if (got[kind].length > read[kind]) res(got[kind][read[kind]++]);
+          else waiting[kind] = res;
+        });
+      s.on("me", () => resolve({ socket: s, regions: got.region, reps: got.reps, next }));
+      s.on("connect_error", (err) => reject(err));
+    });
+
   const newGuardian: Harness["newGuardian"] = async (fields = {}, ip) => {
     const res = await api("/guardians", {
       method: "POST",
@@ -72,5 +110,5 @@ export async function startServer(): Promise<Harness> {
     rmSync(dir, { recursive: true, force: true });
   };
 
-  return { server, dbPath, baseUrl, clock, api, socket, newGuardian, stop };
+  return { server, dbPath, baseUrl, clock, api, socket, watch, newGuardian, stop };
 }

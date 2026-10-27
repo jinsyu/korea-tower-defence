@@ -147,19 +147,25 @@ describe("grading and points (D34, D48, D20)", () => {
   it("puts my bigger tower into the region from the next wave", async () => {
     const { key } = await h.newGuardian({ region: "11010" });
     const power = () => BigInt((h.server.db.prepare("SELECT next_power FROM regions WHERE code = '11010'").get() as any).next_power);
+    await h.server.flushPower();
     const before = power();
     const out = await solve(key, true);
+    // Pooled: the region row changes only with the next flush (every 10 s).
+    expect(power()).toBe(before);
+    await h.server.flushPower();
     expect(power()).toBe(before - BigInt(10) + BigInt(out.me.power));
     expect(power()).toBeGreaterThan(before);
   });
 
   it("a breached region changes none of my numbers (D20)", async () => {
     const { key } = await h.newGuardian({ region: "11010" });
+    await h.server.flushPower();
     await solve(key, true);
     const before = guardianOf(key);
     h.clock.add(3 * DAY_MS + 7 * Number(WAVE_MS));
     // A newcomer settles the region: one small tower keeps getting breached around its top wave.
     await h.newGuardian({ region: "11010" }, "10.0.0.2");
+    await h.server.flushPower();
     const region = h.server.db.prepare("SELECT * FROM regions WHERE code = '11010'").get() as any;
     expect(region.breaches).toBeGreaterThan(0);
     expect(guardianOf(key)).toEqual(before);

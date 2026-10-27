@@ -23,7 +23,7 @@ const guardianCount = () => (h.server.db.prepare("SELECT COUNT(*) AS n FROM guar
 
 describe("http basics", () => {
   it("answers /health with 200 and unknown paths with 404", async () => {
-    expect(await h.api("/health", { origin: null })).toEqual({ status: 200, body: { ok: true } });
+    expect(await h.api("/health", { origin: null })).toEqual({ status: 200, body: { ok: true, sockets: { domain: 0, ip: 0, proxy: 0 } } });
     expect((await h.api("/nope")).status).toBe(404);
   });
 
@@ -129,6 +129,7 @@ describe("device key (D6, D54)", () => {
     expect(made.me).toMatchObject({ points: "0", stage: "1", level: "1", power: "10" });
     const res = await h.api("/me/band", { method: "POST", key: made.key, body: { band: "12", points: 5, stage: 3 } });
     expect(res.body.me).toMatchObject({ points: "0", stage: "1" });
+    await h.server.flushPower();
     expect(regionRow("11010").next_power).toBe("10");
   });
 
@@ -277,6 +278,7 @@ describe("region change (D7)", () => {
   it("moves my power from the old region to the new one from the next wave; record and old best wave stay", async () => {
     const { key } = await h.newGuardian({ region: "11010" });
     await h.newGuardian({ region: "11010" });
+    await h.server.flushPower();
     // The old region fights a few waves with both guardians first.
     h.clock.add(Number(WAVE_MS) * 3 + 1000);
     await h.api("/me", { key });
@@ -286,6 +288,8 @@ describe("region change (D7)", () => {
       .run(hashKey(key));
     const me = (await h.api("/me", { key })).body.me;
     expect((await change(key, "32540")).status).toBe(200);
+    // Applied with the next pool flush (every 10 s), from the wave after.
+    await h.server.flushPower();
     const old = regionRow("11010");
     const fresh = regionRow("32540");
     // The wave in progress keeps the power it started with; the next waves use the new sums.
@@ -301,11 +305,14 @@ describe("region change (D7)", () => {
 describe("delete my record (D8)", () => {
   it("removes the row, takes my power out from the next wave, and kills key and code", async () => {
     const a = await h.newGuardian({ region: "11010" });
+    await h.server.flushPower();
+    expect(regionRow("11010")).toMatchObject({ next_power: "10", guardian_count: 1 });
     const restored = await h.api("/restore", { method: "POST", body: a.code });
     const sock = await h.socket(a.key);
     const gone = new Promise((resolve) => sock.socket.on("disconnect", resolve));
     expect((await h.api("/me", { method: "DELETE", key: a.key })).status).toBe(204);
     await gone;
+    await h.server.flushPower();
     expect(guardianCount()).toBe(0);
     expect((h.server.db.prepare("SELECT COUNT(*) AS n FROM guardian_keys").get() as any).n).toBe(0);
     expect(regionRow("11010")).toMatchObject({ next_power: "0", guardian_count: 0 });

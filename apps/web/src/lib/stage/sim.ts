@@ -112,7 +112,12 @@ export type SimOptions = {
   /** Turret head offset from the spot, in board units. */
   headOffset: (t: SimTower) => BoardPoint;
   balloonColor: (k: BalloonKind) => string;
+  /** Server mode (T13): waves end only when the server says so (`follow`), never on the sim's own clock. */
+  external?: boolean;
 };
+
+/** A server result for the board: `wave` is in progress and breaks through when `breach`; `ended` is how the wave on the board ended (null: unknown). */
+export type WaveFollow = { wave: number; best: number; breach: boolean; ended: boolean | null };
 
 export class StageSim {
   readonly paths: Polyline[];
@@ -289,6 +294,14 @@ export class StageSim {
   endWave() {
     const cleared = this.region.wave;
     this.enemies = this.enemies.filter((e) => e.wave > cleared);
+    this.celebrate(cleared);
+    this.region.wave++;
+    this.emitRegion();
+    this.startWave();
+  }
+
+  /** Wave held: a new best gets the breaking-news banner and confetti. */
+  private celebrate(cleared: number) {
     if (cleared > this.region.best) {
       this.region.best = cleared;
       this.banner(`속보: ${this.stage.name} 최고 웨이브 ${fmt(cleared)} 돌파!`, "red", 2200);
@@ -297,9 +310,34 @@ export class StageSim {
       this.banner(`웨이브 ${fmt(cleared)} 방어!`, "white", 900);
     }
     this.shake("wave-clear");
-    this.region.wave++;
+  }
+
+  /**
+   * Server mode: show the server's wave. The ended wave gets its effect (held, or the breach if its balloons had not
+   * reached the base yet); the next wave follows on, and a screen that fell behind jumps to the server's wave (D23).
+   */
+  follow(next: WaveFollow) {
+    const r = this.region;
+    if (next.wave === r.wave && next.breach === this.breach) {
+      r.best = Math.max(r.best, next.best);
+      return;
+    }
+    const from = r.wave;
+    if (next.ended === true) this.celebrate(from);
+    else if (next.ended === false) this.doBreach();
+    const onTrack = next.ended === true && next.wave === from + 1;
+    r.wave = next.wave;
+    r.best = Math.max(r.best, next.best);
+    this.breach = next.breach;
+    this.resetAt = null;
+    if (onTrack) {
+      this.enemies = this.enemies.filter((e) => e.wave > from);
+    } else {
+      this.enemies = [];
+      this.shots = [];
+    }
     this.emitRegion();
-    this.startWave();
+    this.startWave(!onTrack);
   }
 
   /** Demo / server result: the coming wave breaks through. */
@@ -479,6 +517,7 @@ export class StageSim {
     });
 
     this.fx = this.fx.filter((f) => this.time - f.t < f.dur);
+    if (this.opts.external) return;
     if (this.resetAt != null && this.time >= this.resetAt) this.finishBreach();
     if (!this.breach && this.waveT >= this.stage.pace.waveSec) this.endWave();
   }

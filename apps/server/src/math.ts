@@ -28,6 +28,7 @@ import {
   type Outcome,
   type Recent,
 } from "./math-rules";
+import type { Points24 } from "./points24";
 import type { Regions } from "./regions";
 
 /**
@@ -76,7 +77,8 @@ export type Refused = { error: "no_problem" | "no_guardian" };
 
 export type MathService = ReturnType<typeof createMath>;
 
-export function createMath(db: Db, regions: Regions) {
+/** `onCorrect` counts right answers per region for the region broadcast ("지난 1초 정답 수"). */
+export function createMath(db: Db, regions: Regions, points24: Points24, onCorrect: (region: string) => void) {
   const q = {
     guardian: db.prepare<[string], MathRow>("SELECT * FROM guardians WHERE id = ?"),
     open: db.prepare<[string], OpenRow>("SELECT * FROM open_problems WHERE guardian_id = ?"),
@@ -196,10 +198,12 @@ export function createMath(db: Db, regions: Regions) {
       level: Number(after.level),
       stage: Number(after.stage),
     });
+    points24.add(guardianId, at, Number(points));
     const saved = q.guardian.get(guardianId)!;
-    // My tower's power joins the region from the next wave (spec "화면 연출과 서버 결과 맞추기").
+    // My tower's power joins the region with the next pool flush, from the wave after (spec "화면 연출과 서버 결과 맞추기").
     const delta = powerOf(saved) - powerOf(g);
-    if (delta !== BigInt(0)) regions.shiftPower(g.region, delta, 0, at);
+    if (delta !== BigInt(0)) regions.shiftPower(g.region, delta, 0);
+    if (correct) onCorrect(g.region);
 
     return {
       correct,
@@ -210,7 +214,7 @@ export function createMath(db: Db, regions: Regions) {
       limited,
       restHint: earns && nth === Number(FULL_POINTS_UNTIL) + 1,
       step: streaks.moved,
-      me: meView(saved, at),
+      me: meView(saved, at, points24.of(guardianId, at)),
       ...status(saved, at),
     };
   }

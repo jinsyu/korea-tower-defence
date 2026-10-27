@@ -77,12 +77,22 @@ export function useServerMath({ enabled, band, offline, onAnswered, onUnreachabl
     };
   }, [enabled, load, later]);
 
+  // Back online (D58): the held next problem comes now; an unanswered one is asked for again, and the server deals the
+  // same open problem (a marked one stays as it is until "다음 문제").
+  const wasOffline = useRef(offline);
+  const answeredRef = useRef(view.answered);
   useEffect(() => {
-    if (!offline && heldNext.current) {
+    answeredRef.current = view.answered;
+  }, [view.answered]);
+  useEffect(() => {
+    const back = wasOffline.current && !offline;
+    wasOffline.current = offline;
+    if (!back || !enabled) return;
+    if (heldNext.current || !answeredRef.current) {
       heldNext.current = false;
       later(() => void load(), 0);
     }
-  }, [offline, load, later]);
+  }, [offline, enabled, load, later]);
 
   const pick = useCallback(
     async (choice: number) => {

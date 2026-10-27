@@ -407,7 +407,7 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
 
 ### T13: 게임 서버 3 — 지역 정산, 화력 모으기, 대표 뽑기, 지역 방송, 지난 소식, 연결 순서 [E2E] — DoD: D21, D22, D23, D24, D57, D58, D77
 
-- [ ] T13
+- [x] T13
 
 - 서버
   - 지역 상태와 게으른 정산(T10-1), 화력 10초 모으기, 대표 10분 뽑기
@@ -428,9 +428,13 @@ spec 위험 "진행 속도 맞추기 (PoC 필요)". 포인트·업그레이드�
   - D22는 가짜 지역 1,000명으로 통합 시험한다
 - 검증 명령
   ```sh
-  pnpm test --filter server --filter core
-  uptime && pnpm --filter web test:e2e -- tests/e2e/region.spec.ts tests/e2e/connect.spec.ts
+  pnpm test --project server --project core --project web && pnpm typecheck && pnpm lint
+  uptime && pnpm --filter web test:e2e tests/e2e/region.spec.ts tests/e2e/connect.spec.ts
+  pnpm --filter web build
   ```
+  - e2e 줄에 `--`를 넣지 않는다(`--`가 Playwright에 그대로 넘어가 파일 거르기가 꺼진다).
+  - D58은 서버를 실제로 끄므로 `restart` 프로젝트로 따로 돈다. 이 프로젝트가 화면 프로젝트(mobile-360, desktop-1440)에 기대므로 Playwright는 그 프로젝트의 시험을 파일 거르기 없이 모두 먼저 돌린다(math.spec 포함, 모두 15개, 약 2분 반).
+  - e2e는 web을 E2E 주소로 다시 빌드하므로, 끝난 뒤 `pnpm --filter web build`로 되돌린다.
 - 완료 기준: 위 DoD
 
 ### T13-2: 내 타워 꾸미기 저장 — 성향·계열·색을 서버에 (2026-10-27 추가)
@@ -458,6 +462,7 @@ T12 리뷰에서 찾은 빈틈. T8 화면에서 성향·계열·색을 바꿔도
 
 - T1의 부하 발생기를 `apps/server/load/`로 옮기고 실제 서버(T11~T13)로 S1~S3을 다시 돈다
 - 같은 Docker 제한(`--cpus=1 --memory=768m`)에서 잰다
+- T13 리뷰 넘김: socket.io ping 1초(접속 1만이면 초당 약 2만 개)의 CPU 부담, 화력 변경 기록 30일치 DB 크기를 함께 잰다
 - T1 기록과 비교한 표를 `docs/poc/load-poc.md`에 더한다
 - 실패하면 T1의 "실패하면 바꿀 것" 순서를 따른다. 사용자 결정이 필요하면 멈추고 묻는다.
 - 검증 명령
@@ -592,7 +597,8 @@ spec 위험 "185개 맵 자동 생성", "OSM 도로 품질과 태그", "경계�
   - Caddy 사이트 파일 초안: 도메인 사이트, IP 사이트 `/ktd` handle_path, 접근 로그 없음
   - 매일 DB 파일 백업 스크립트와 복원 시험 안내
   - 점검 화면
-- Vercel 설정: 환경 변수 이름, `/rt` 프록시 rewrite, 공유 비밀값 헤더
+- Vercel 설정: 환경 변수 이름, `/rt` 프록시 rewrite, 공유 비밀값 헤더, 함수 지역 icn1(T13 리뷰: `/rt` 끊김 깜빡임 빈도를 잰다)
+- systemd 유닛에 `NODE_ENV=production`(시험 시계 막음, T13 리뷰)
 - `docs/ops.md`: 사용자 실행 순서, 끄기·되돌리기, 확인 명령
 - 사용자가 실행한 뒤 확인한다
   - 세 경로 연결(D77 실제)

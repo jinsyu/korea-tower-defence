@@ -16,7 +16,7 @@ import {
 import { createHash, createHmac, randomBytes, randomInt } from "node:crypto";
 import type { Db } from "./db";
 import { addDays, kstDate } from "./dates";
-import type { Regions } from "./regions";
+import type { Regions, RegionTruth } from "./regions";
 import { INACTIVE_DAYS, regionChangeStatus, type RegionChange } from "./rules";
 
 export const BANDS: readonly MathBand[] = ["12", "34", "56"];
@@ -87,12 +87,19 @@ export type MeView = {
   stage: string;
   power: string;
   stats: Record<string, string>;
+  /** My tower's public id in the region broadcast (representatives), so the screen finds itself there. */
+  rid: string;
+  /** Points I earned in the last 24 hours (representatives, D21). */
+  points24h: number;
 };
 
-export const powerOf = (g: GuardianRow): bigint =>
+/** Public tower id: a hash of the private guardian id, never the id itself. */
+export const publicId = (id: string): string => createHash("sha256").update(`rid:${id}`).digest("base64url").slice(0, 12);
+
+export const powerOf = (g: Pick<GuardianRow, "stage" | "level" | "tendency" | "tower_type">): bigint =>
   towerPower({ stage: BigInt(g.stage), level: BigInt(g.level), tendency: g.tendency, towerType: g.tower_type });
 
-export function meView(g: GuardianRow, now: number): MeView {
+export function meView(g: GuardianRow, now: number, points24h: number): MeView {
   const nick = { adj: g.nick_adj, noun: g.nick_noun, tag: g.nick_tag };
   const stats = splitStats(statPointsOf(BigInt(g.level)), g.tendency);
   return {
@@ -111,6 +118,8 @@ export function meView(g: GuardianRow, now: number): MeView {
     stage: String(g.stage),
     power: powerOf(g).toString(),
     stats: Object.fromEntries(Object.entries(stats).map(([k, v]) => [k, v.toString()])),
+    rid: publicId(g.id),
+    points24h,
   };
 }
 
@@ -142,6 +151,9 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     touch: db.prepare("UPDATE guardians SET last_seen_on = ? WHERE id = ?"),
     remove: db.prepare("DELETE FROM guardians WHERE id = ?"),
     unseenSince: db.prepare<[string], GuardianRow>("SELECT * FROM guardians WHERE last_seen_on <= ?"),
+    towers: db.prepare<[], Pick<GuardianRow, "region" | "stage" | "level" | "tendency" | "tower_type">>(
+      "SELECT region, stage, level, tendency, tower_type FROM guardians",
+    ),
   };
 
   const newKey = (id: string): string => {
@@ -183,8 +195,9 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
       last_seen_on: kstDate(now),
     });
     const guardian = get(id);
-    regions.shiftPower(input.region, powerOf(guardian), 1, now);
-    return { key: newKey(id), code, guardian };
+    const key = newKey(id);
+    regions.shiftPower(input.region, powerOf(guardian), 1);
+    return { key, code, guardian };
   }
 
   const codeExists = (code: RecoveryCode): boolean => q.codeTaken.get(hashCode(code)) !== undefined;
@@ -223,9 +236,9 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
     const status = regionChangeStatus(g.region_picked_at, g.region_changed_on, now);
     if (!status.allowed) return { ok: false, reason: "locked", nextOn: status.nextOn };
     const p = powerOf(g);
-    regions.shiftPower(g.region, -p, -1, now);
-    regions.shiftPower(region, p, 1, now);
     q.setRegion.run(region, kstDate(now), id);
+    regions.shiftPower(g.region, -p, -1);
+    regions.shiftPower(region, p, 1);
     return { ok: true, guardian: get(id) };
   }
 
@@ -237,17 +250,29 @@ export function createGuardians(db: Db, regions: Regions, serverSecret: string) 
   }
 
   /** "내 기록 지우기" and the 365-day clean-up: the row and its keys go, the power leaves from the next wave (D8, D76). */
-  function remove(id: string, now: number): void {
+  function remove(id: string): void {
     const g = get(id);
-    regions.shiftPower(g.region, -powerOf(g), -1, now);
     q.remove.run(id);
+    regions.shiftPower(g.region, -powerOf(g), -1);
   }
 
   function purgeInactive(now: number): number {
     const gone = q.unseenSince.all(addDays(kstDate(now), -INACTIVE_DAYS));
-    gone.forEach((g) => remove(g.id, now));
+    gone.forEach((g) => remove(g.id));
     return gone.length;
   }
 
-  return { byKey, codeExists, create, restore, touch, setBand, setNick, changeRegion, newCode, remove, purgeInactive };
+  /** Every region's power and guardian count from the guardian rows (the truth the pooled sums must match). */
+  function regionTruth(): RegionTruth {
+    const truth: RegionTruth = new Map();
+    for (const g of q.towers.iterate()) {
+      const t = truth.get(g.region) ?? { power: BigInt(0), guardians: 0 };
+      t.power += powerOf(g);
+      t.guardians += 1;
+      truth.set(g.region, t);
+    }
+    return truth;
+  }
+
+  return { regionTruth, byKey, codeExists, create, restore, touch, setBand, setNick, changeRegion, newCode, remove, purgeInactive };
 }

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { readDeviceKey, saveDeviceKey } from "./device-key";
-import { callAsGuardian, dayLabel, gameServerUrl, nickName, nickTag, type ServerMe } from "./game-server";
+import { callAsGuardian, dayLabel, nickName, nickTag, type ServerMe } from "./game-server";
 import { regionName } from "./region-names";
 import { meFromServer } from "./stage/me-store";
 
@@ -19,8 +19,11 @@ function fakeBrowser() {
       removeItem: (k: string) => void store.delete(k),
     },
   });
+  // The request leaves after the connection order is known: an answer given before it is kept until it leaves.
+  let reply: Promise<Response> | null = null;
   let answer: (res: Response) => void = () => undefined;
-  vi.stubGlobal("fetch", () => new Promise<Response>((resolve) => (answer = resolve)));
+  const replied = new Promise<Response>((resolve) => (answer = resolve));
+  vi.stubGlobal("fetch", () => (reply ??= replied));
   return { answer: (status: number) => answer(new Response(JSON.stringify({ error: "no_guardian" }), { status })) };
 }
 
@@ -47,13 +50,6 @@ describe("requests as my guardian (D6)", () => {
 });
 
 describe("game server client", () => {
-  it("uses the first listed server address, or the local dev server", () => {
-    vi.stubEnv("NEXT_PUBLIC_RT_URLS", " https://a.example , https://b.example");
-    expect(gameServerUrl()).toBe("https://a.example");
-    vi.stubEnv("NEXT_PUBLIC_RT_URLS", "");
-    expect(gameServerUrl()).toBe("http://127.0.0.1:4000");
-  });
-
   it("shows nickname numbers as list words and a 4-digit tag", () => {
     expect(nickName({ adj: 0, noun: 0, tag: 427 })).toBe("씩씩한 수달");
     expect(nickTag({ adj: 0, noun: 0, tag: 7 })).toBe("0007");
@@ -83,8 +79,12 @@ describe("my guardian from the server", () => {
       wallet: "7",
       stage: "12",
       power: "20",
+      rid: "AbCdEfGhIjKl",
+      points24h: 36,
     };
     expect(meFromServer(server)).toMatchObject({
+      id: "AbCdEfGhIjKl",
+      pts24: 36,
       nick: "씩씩한 수달",
       tag: "0427",
       band: "34",

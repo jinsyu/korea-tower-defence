@@ -28,8 +28,18 @@ export type BoardTower = { guardian: Guardian; me: boolean } & ({ spot: "rep"; i
 
 export function boardTowers(guardians: readonly Guardian[], me: Guardian, repSpotCount: number): BoardTower[] {
   const others = guardians.filter((g) => g.id !== me.id);
-  const reps = pickRepresentatives([...others, me], repSpotCount);
-  const towers: BoardTower[] = reps.map((g, index) => ({ guardian: g, me: g.id === me.id, spot: "rep", index }));
+  return placeTowers(pickRepresentatives([...others, me], repSpotCount), me, repSpotCount);
+}
+
+/**
+ * Towers for representatives already picked in order (the server's list, T13): the first n take the spots, my
+ * entry is drawn with my own (newer) tower, and I stand on my spot when I am not among them.
+ */
+export function placeTowers(reps: readonly Guardian[], me: Guardian, repSpotCount: number): BoardTower[] {
+  const towers: BoardTower[] = reps.slice(0, repSpotCount).map((g, index) => {
+    const mine = g.id === me.id;
+    return { guardian: mine ? { ...me, pts24: g.pts24 } : g, me: mine, spot: "rep", index };
+  });
   if (!towers.some((t) => t.me)) towers.push({ guardian: me, me: true, spot: "mine" });
   return towers;
 }

@@ -1,5 +1,6 @@
 // The game server API (apps/server). Screens call it with the device key; the server keeps everything else.
 import { clearDeviceKeyIfStill, readDeviceKey } from "@/lib/device-key";
+import { rtRoute } from "@/lib/rt-route";
 import { NICK_ADJECTIVES, NICK_NOUNS, type MathBand, type RecoveryCode, type Tendency, type TowerType } from "@ktd/core";
 
 /** Nickname number from the server: adjective, noun and a 4-digit tag. */
@@ -23,17 +24,13 @@ export type ServerMe = {
   wallet: string;
   stage: string;
   power: string;
+  /** My tower's public id in the region broadcast. */
+  rid: string;
+  /** Points I earned in the last 24 hours. */
+  points24h: number;
 };
 
 export type Created = { key: string; code: RecoveryCode; me: ServerMe };
-
-const DEV_SERVER = "http://127.0.0.1:4000";
-
-/** First game server address. The full domain → IP → proxy order comes with deployment (T20). */
-export function gameServerUrl(): string {
-  const listed = (process.env.NEXT_PUBLIC_RT_URLS ?? "").split(",").map((u) => u.trim());
-  return listed.find(Boolean) ?? DEV_SERVER;
-}
 
 export type ServerReply<T> =
   | { ok: true; status: number; data: T }
@@ -49,7 +46,9 @@ export async function callServer<T>(
   if (body !== undefined) headers["content-type"] = "application/json";
   let res: Response;
   try {
-    res = await fetch(gameServerUrl() + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+    // Domain, else the IP path, else this site's /rt proxy (D77).
+    const base = (await rtRoute()).http;
+    res = await fetch(base + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
     return { ok: false, status: 0, data: {} };
   }

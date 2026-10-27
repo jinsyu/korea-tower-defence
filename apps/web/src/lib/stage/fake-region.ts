@@ -9,9 +9,12 @@ export type RegionHud = {
   name: string;
   guardians: number;
   online: number;
+  /** 0 until the server's first message. */
   wave: number;
   best: number;
-  power: number;
+  /** Region power P (per second) and the enemy health it must match, H(w) ÷ 60 rounded up. */
+  power: bigint;
+  enemy: bigint;
   perSec: number;
   rank: number;
 };
@@ -35,7 +38,12 @@ export const FAKE_BOARD: BoardStats = fakeBoardStats([...SIDO_OF.keys()], (code)
   solvers: 1290,
 });
 
-export const FAKE_REGION: RegionHud = { ...MY_REGION, rank: FAKE_BOARD.regions.get(FAKE_REGION_CODE)!.rankWave! };
+export const FAKE_REGION: RegionHud = {
+  ...MY_REGION,
+  power: BigInt(MY_REGION.power),
+  enemy: (BigInt(MY_REGION.power) * BigInt(97)) / BigInt(100),
+  rank: FAKE_BOARD.regions.get(FAKE_REGION_CODE)!.rankWave!,
+};
 
 /** Mockup B "씩씩한 수달": level 23, step 47, 580 points toward the next step. */
 export const FAKE_ME: Me = {

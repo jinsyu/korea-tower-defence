@@ -9,3 +9,4 @@ export * from "./format";
 export * from "./game/waves";
 export * from "./game/progress";
 export * from "./game/pace-bot";
+export * from "./game/news";
